@@ -80,7 +80,7 @@ sample =
         , { id = 22
           , title = "Feature B"
           , iterationPath = "Contoso\\ART\\PI-2025-1\\Sprint 4"
-          , state = "Closed"
+          , state = "Active"
           , tags = [ "UAT" ]
           }
         , { id = 33
@@ -91,6 +91,12 @@ sample =
           }
         , { id = 44
           , title = "Feature D"
+          , iterationPath = "Contoso\\ART\\PI-2025-1\\Sprint 3" -- WholePI
+          , state = "Closed"
+          , tags = []
+          }
+        , { id = 55
+          , title = "Feature E"
           , iterationPath = "Contoso\\ART\\PI-2025-1\\Sprint 3" -- WholePI
           , state = "Closed"
           , tags = []
@@ -107,5 +113,6 @@ sample =
         , { id = 301, title = "Report engine", parentId = 33, iterationPath = "Contoso\\ART\\PI-2025-1\\Sprint 2", state = "Active" }
         , { id = 302, title = "Export CSV", parentId = 33, iterationPath = "Contoso\\ART\\PI-2025-1\\Sprint 4", state = "New" }
         , { id = 401, title = "Export json", parentId = 44, iterationPath = "Contoso\\ART\\PI-2025-1\\Sprint 2", state = "New" }
+        , { id = 501, title = "Export excel", parentId = 55, iterationPath = "Contoso\\ART\\PI-2025-1\\Sprint 2", state = "Closed" }
         ]
     }

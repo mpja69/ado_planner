@@ -72,3 +72,4 @@ type FeatureWarn
     = NoWarn
     | WarnAfter
     | WarnNeedsDelivery
+    | WarnStoriesNotDone
