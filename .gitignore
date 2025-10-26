@@ -1,0 +1,11 @@
+/dist/
+/elm-stuff/
+/node_modules/
+/out/
+elm.js
+overlay.css
+.DS_Store
+*.log
+*.zip
+*.pdf
+.env

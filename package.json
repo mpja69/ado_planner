@@ -1,0 +1,23 @@
+{
+	"name": "sprint-planner",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"build": "npm run elm:build && npm run css:build && vite build",
+		"clean": "rimraf dist",
+		"elm:build": "elm make src/Elm/App.elm --output=public/elm.js",
+		"css:build": "tailwindcss -i ./src/styles.css -o ./public/overlay.css --minify"
+	},
+	"devDependencies": {
+		"@types/chrome": "^0.1.24",
+		"autoprefixer": "^10.4.20",
+		"elm": "^0.19.1-6",
+		"elm-tooling": "^1.16.0",
+		"postcss": "^8.4.41",
+		"rimraf": "^6.0.1",
+		"tailwindcss": "3.4.1",
+		"typescript": "~5.6.2",
+		"vite": "^5.4.0"
+	}
+}

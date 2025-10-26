@@ -1,0 +1,8 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Overlay backdrop variable (kan tweakas) */
+:root {
+  --sp-backdrop: rgba(15, 23, 42, 0.55); /* slate-900 / 55% */
+}

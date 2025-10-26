@@ -1,0 +1,36 @@
+{
+	"manifest_version": 3,
+	"name": "Sprint Planner",
+	"version": "0.1.0",
+	"description": "Team-level sprint planning matrix overlay for Azure DevOps.",
+	"permissions": [
+		"storage"
+	],
+	"host_permissions": [
+		"https://dev.azure.com/*"
+	],
+	"web_accessible_resources": [
+		{
+			"resources": [
+				"overlay.html",
+				"elm.js",
+				"overlay.css",
+				"overlay.js"
+			],
+			"matches": [
+				"https://dev.azure.com/*"
+			]
+		}
+	],
+	"content_scripts": [
+		{
+			"matches": [
+				"https://dev.azure.com/*"
+			],
+			"js": [
+				"content.js"
+			],
+			"run_at": "document_idle"
+		}
+	]
+}
