@@ -102,6 +102,7 @@ translate ctx sample =
             , title = f.title
             , delivery = deliveryFromPath ctx f.iterationPath
             , status = Ado.stateToStatus f.state -- ⬅️ NEW
+            , closedDate = Nothing
             , tests = testsFromTags f.tags
             , stories = storiesByFeature f.id |> List.map toStory
             }

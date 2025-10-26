@@ -1,13 +1,8 @@
-module Types exposing
-    ( AdoCmd(..)
-    , FeatureRow
-    , FeatureWarn(..)
-    , Status(..)
-    , Story
-    , StoryIteration(..)
-    , TestKind(..)
-    , Tests
-    )
+module Types exposing (..)
+
+import Time exposing (Posix)
+
+
 
 -- UI/Domain types used by the app
 
@@ -46,11 +41,22 @@ type TestKind
     | E2E
 
 
+
+-- ROW MODE (derived from feature status + unlocks)
+
+
+type RowMode
+    = Active
+    | DoneCompact
+    | DoneExpanded
+
+
 type alias FeatureRow =
     { featureId : Int
     , title : String
     , delivery : Maybe Int -- 1..N if feature iteration is a sprint; Nothing for WholePI/Missing/Outside
     , status : Status
+    , closedDate : Maybe Posix -- NEW: ADO ClosedDate (if available)
     , tests : Tests -- mapped from tags later
     , stories : List Story
     }

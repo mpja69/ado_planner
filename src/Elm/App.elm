@@ -4,12 +4,14 @@ import Browser
 import Data.Ado as Ado
 import Data.Translate as T
 import Dict exposing (Dict)
-import Html exposing (Html, div, span, text)
+import Html exposing (Html, button, div, span, text)
 import Html.Attributes as A
 import Html.Events
 import Json.Decode
+import Set exposing (Set)
 import Svg exposing (Svg, svg)
 import Svg.Attributes as SA
+import Time exposing (Posix)
 import Types exposing (..)
 
 
@@ -23,6 +25,8 @@ import Types exposing (..)
 -- Add a Settings where you can
 --    Map tests -> Tags
 --    Map ToW -> Tags
+-- Add checking for AreaPath
+--    Are the stories in the right place?
 
 
 type alias Model =
@@ -34,6 +38,7 @@ type alias Model =
     , hoverStorySprint : Maybe Int
     , pi : T.PiContext
     , outbox : List AdoCmd
+    , unlocked : Set Int -- featureIds that are temporarily expanded/unlocked
     }
 
 
@@ -60,6 +65,7 @@ init =
     , hoverStorySprint = Nothing
     , pi = ctx
     , outbox = []
+    , unlocked = Set.empty
     }
 
 
@@ -77,6 +83,8 @@ type Msg
     | StoryDragEnd
     | HoverStory (Maybe Int)
     | StoryDrop Int
+    | UnlockRow Int -- NEW
+    | LockRow Int -- NEW (used if you add a collapse control later)
     | NoOp
 
 
@@ -194,6 +202,18 @@ update msg model =
             in
             { model | rows = newRows, outbox = newOutbox }
 
+        -- NEW: expand/unlock a closed row
+        UnlockRow fid ->
+            { model | unlocked = Set.insert fid model.unlocked }
+
+        -- NEW: collapse/lock (if you later add a button to re-compact)
+        LockRow fid ->
+            { model | unlocked = Set.remove fid model.unlocked }
+
+
+
+-- HELPERS
+
 
 toggleTest : Int -> TestKind -> FeatureRow -> FeatureRow
 toggleTest fid kind row =
@@ -217,10 +237,6 @@ toggleTest fid kind row =
                         { t | e2e = not t.e2e }
         in
         { row | tests = new }
-
-
-
--- HELPERS
 
 
 lastStorySprint : FeatureRow -> Int
@@ -259,6 +275,67 @@ hasStoryAfterDelivery row =
 
 
 
+-- Determine mode of a feature row based on its status and unlock state
+
+
+rowMode : Model -> FeatureRow -> RowMode
+rowMode model row =
+    if row.status == Done then
+        if Set.member row.featureId model.unlocked then
+            DoneExpanded
+
+        else
+            DoneCompact
+
+    else
+        Active
+
+
+
+-- Centralized interaction rule
+
+
+canInteract : RowMode -> Bool
+canInteract mode =
+    case mode of
+        Active ->
+            True
+
+        DoneExpanded ->
+            True
+
+        -- allow interaction when user explicitly unlocked
+        DoneCompact ->
+            False
+
+
+isMismatchClosedFeature : FeatureRow -> Bool
+isMismatchClosedFeature row =
+    row.status
+        == Done
+        && List.any (\s -> s.status /= Done) row.stories
+
+
+closedSprintIx : Model -> FeatureRow -> Maybe Int
+closedSprintIx model row =
+    case row.closedDate of
+        Nothing ->
+            Nothing
+
+        Just posix ->
+            dateToSprint model posix
+
+
+
+-- Stub: fill in using your PI boundaries/cadence later
+
+
+dateToSprint : Model -> Posix -> Maybe Int
+dateToSprint _ _ =
+    Nothing
+
+
+
 -- VIEW
 
 
@@ -270,22 +347,36 @@ main =
 
 view : Model -> Html Msg
 view model =
+    div [ A.class "w-full h-screen p-6" ]
+        [ div [ A.class "text-2xl font-bold mb-4" ] [ text "Sprint Planner" ]
+        , gridView model
+        ]
+
+
+gridView : Model -> Html Msg
+gridView model =
     let
-        -- vänsterspalt 220px + N lika breda sprintkolumner
         templateCols =
             "220px repeat(" ++ String.fromInt model.sprintCount ++ ", minmax(0, 1fr))"
     in
-    div [ A.class "w-full h-screen p-6" ]
-        [ div [ A.class "text-2xl font-bold mb-4" ] [ text "Sprint Planner" ]
-        , div
-            [ A.style "display" "grid"
-            , A.style "grid-template-columns" templateCols
-            , A.class "gap-2"
-            ]
-            (headerRow model.sprintCount
-                :: List.concatMap (featureRowView model) model.rows
-            )
+    div
+        [ A.style "display" "grid"
+        , A.style "grid-template-columns" templateCols
+        , A.class "gap-2"
         ]
+        (headerRow model.sprintCount
+            :: List.concatMap (rowView model) model.rows
+        )
+
+
+rowView : Model -> FeatureRow -> List (Html Msg)
+rowView model row =
+    case rowMode model row of
+        DoneCompact ->
+            featureRowViewDoneCompact model row
+
+        _ ->
+            featureRowView model row
 
 
 headerRow : Int -> Html Msg
@@ -300,36 +391,170 @@ headerRow n =
         )
 
 
+featureHeader : RowMode -> FeatureRow -> Html Msg
+featureHeader mode row =
+    let
+        -- title size differs a bit in compact vs expanded
+        titleCls =
+            case mode of
+                DoneCompact ->
+                    "text-[11px] font-semibold truncate"
+
+                _ ->
+                    "text-[12px] font-semibold truncate"
+
+        -- chevron differs by mode
+        chevronView : Html Msg
+        chevronView =
+            case mode of
+                DoneCompact ->
+                    -- expand (▸)
+                    span
+                        [ A.class "inline-flex items-center justify-center w-5 h-5 rounded-md bg-white/60 border border-emerald-200 cursor-pointer select-none shrink-0"
+                        , Html.Events.onClick (UnlockRow row.featureId)
+                        , A.title "Expand row"
+                        ]
+                        [ text "▸" ]
+
+                DoneExpanded ->
+                    -- collapse (▾)
+                    span
+                        [ A.class "inline-flex items-center justify-center w-5 h-5 rounded-md bg-white/60 border border-emerald-200 cursor-pointer select-none shrink-0"
+                        , Html.Events.onClick (LockRow row.featureId)
+                        , A.title "Collapse row"
+                        ]
+                        [ text "▾" ]
+
+                Active ->
+                    text ""
+    in
+    -- inner header row: title left, chevron right
+    div [ A.class "flex items-center justify-between gap-2 min-w-0" ]
+        [ span [ A.class titleCls, A.title row.title ] [ text row.title ]
+        , chevronView
+        ]
+
+
+
+-- Compact view ------------------------------
+
+
+featureRowViewDoneCompact : Model -> FeatureRow -> List (Html Msg)
+featureRowViewDoneCompact model row =
+    let
+        leftCell : Html Msg
+        leftCell =
+            div
+                [ A.class "sticky left-0 z-10" ]
+                [ -- compact wrapper tone stays here
+                  div
+                    [ A.class "px-2 py-1 rounded-xl bg-emerald-50/50 border border-emerald-300 text-emerald-950" ]
+                    [ featureHeader DoneCompact row ]
+                ]
+
+        sprintCells : List (Html Msg)
+        sprintCells =
+            List.map (\ix -> compactSprintCell model row ix)
+                (List.range 1 model.sprintCount)
+    in
+    leftCell :: sprintCells
+
+
+compactSprintCell : Model -> FeatureRow -> Int -> Html Msg
+compactSprintCell model row ix =
+    let
+        isDeliveryHere =
+            row.delivery == Just ix
+
+        closedIx : Maybe Int
+        closedIx =
+            closedSprintIx model row
+
+        mismatchHere : Bool
+        mismatchHere =
+            case ( row.delivery, closedIx ) of
+                ( Just d, Just c ) ->
+                    d /= c && d == ix
+
+                _ ->
+                    False
+
+        markers : List (Html Msg)
+        markers =
+            (if row.status == Done && isDeliveryHere then
+                [ doneHereDotCompact ]
+
+             else
+                []
+            )
+                ++ (if mismatchHere then
+                        [ warnMismatchDotCompact ]
+
+                    else
+                        []
+                   )
+    in
+    div
+        [ A.class "px-2 py-1 rounded-lg border border-slate-200 bg-white min-h-[28px] flex items-center justify-start gap-1" ]
+        (if List.isEmpty markers then
+            [ span [ A.class "text-[10px] text-slate-300" ] [ text "–" ] ]
+
+         else
+            markers
+        )
+
+
+doneHereDotCompact : Html Msg
+doneHereDotCompact =
+    span
+        [ A.class "inline-block w-2 h-2 rounded-full bg-emerald-500"
+        , A.title "Delivered here"
+        ]
+        []
+
+
+warnMismatchDotCompact : Html Msg
+warnMismatchDotCompact =
+    span
+        [ A.class "inline-flex items-center justify-center w-4 h-4 rounded-full border border-amber-300 bg-amber-50 text-amber-700 text-[10px] leading-none"
+        , A.title "Closed date does not match Iteration Path"
+        ]
+        [ text "!" ]
+
+
+
+-- Normal view -----------------------------------
+
+
 featureRowView : Model -> FeatureRow -> List (Html Msg)
 featureRowView model row =
     let
-        -- Left sticky cell: title, and if delivery is missing -> show a draggable featureCard here
+        mode =
+            rowMode model row
+
         featureCell : Html Msg
         featureCell =
             let
-                baseLeftCls =
-                    "px-3 py-2 rounded-xl bg-slate-100/70 border border-slate-200 font-medium sticky left-0 z-10"
+                baseCls =
+                    "px-3 py-2 rounded-xl bg-slate-100/70 border border-slate-200 font-medium sticky left-0 z-10 transition"
+
+                toneCls =
+                    case mode of
+                        DoneExpanded ->
+                            " bg-emerald-50/60 border-emerald-200"
+
+                        _ ->
+                            ""
             in
-            case row.delivery of
-                Nothing ->
-                    -- Title + “home” feature card to drag into a sprint
-                    div [ A.class baseLeftCls, A.style "backdrop-filter" "blur(2px)" ]
-                        [ div [ A.class "text-slate-700 text-[12px] font-semibold mb-1 truncate" ]
-                            [ text row.title ]
-                        , -- no ghost; no “after” warn (that warn applies when a delivery exists)
-                          featureCard False WarnNeedsDelivery row
-                        ]
+            div
+                [ A.class (baseCls ++ toneCls)
+                , A.style "backdrop-filter" "blur(2px)"
+                ]
+                [ featureHeader mode row ]
 
-                Just _ ->
-                    -- Just the title when delivery is set
-                    div [ A.class baseLeftCls, A.style "backdrop-filter" "blur(2px)" ]
-                        [ text row.title ]
-
-        -- Normal sprint cells to the right
         cells : List (Html Msg)
         cells =
-            List.map (\ix -> sprintCell model row ix)
-                (List.range 1 model.sprintCount)
+            List.map (\ix -> sprintCell model row ix) (List.range 1 model.sprintCount)
     in
     featureCell :: cells
 
