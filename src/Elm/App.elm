@@ -273,6 +273,34 @@ hasStoryAfterDelivery row =
 
 
 
+-- NEW
+
+
+selectWarnKind : FeatureRow -> FeatureWarn
+selectWarnKind row =
+    if row.status == Done then
+        -- Feature marked Done; if any story is not Done -> warn
+        if List.any (\s -> s.status /= Done) row.stories then
+            WarnStoriesNotDone
+
+        else
+            NoWarn
+
+    else
+        -- Feature NOT done
+        case row.delivery of
+            Nothing ->
+                WarnNeedsDelivery
+
+            Just _ ->
+                if hasStoryAfterDelivery row then
+                    WarnAfter
+
+                else
+                    NoWarn
+
+
+
 -- Is there ANY unfinished story on the row?
 
 
@@ -709,17 +737,7 @@ featureRowView model row =
 
         warnKind : FeatureWarn
         warnKind =
-            if row.delivery == Nothing then
-                WarnNeedsDelivery
-
-            else if hasUnfinishedStories row then
-                WarnStoriesNotDone
-
-            else if hasStoryAfterDelivery row then
-                WarnAfter
-
-            else
-                NoWarn
+            selectWarnKind row
 
         featureCell : Html Msg
         featureCell =
@@ -863,14 +881,7 @@ sprintCell model row ix =
         -- 3) Warn kind (after/delivery/stories-not-done) -------------
         warnKind : FeatureWarn
         warnKind =
-            if hasUnfinishedStories row then
-                WarnStoriesNotDone
-
-            else if hasStoryAfterDelivery row then
-                WarnAfter
-
-            else
-                NoWarn
+            selectWarnKind row
 
         -- 4) Cell-level validity (active rows only) ------------------
         -- Story valid target: dragging a story that belongs to THIS row

@@ -68,6 +68,15 @@ type AdoCmd
     | SetFeatureTags { featureId : Int, sit : Bool, uat : Bool, e2e : Bool }
 
 
+
+-- NEW
+-- type FeatureWarn
+--     = NoWarn
+--     | WarnNeedsDelivery
+--     | WarnAfter
+--     | WarnStoriesRemain
+
+
 type FeatureWarn
     = NoWarn
     | WarnAfter
