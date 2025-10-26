@@ -89,6 +89,12 @@ sample =
           , state = "New"
           , tags = []
           }
+        , { id = 44
+          , title = "Feature D"
+          , iterationPath = "Contoso\\ART\\PI-2025-1\\Sprint 3" -- WholePI
+          , state = "Closed"
+          , tags = []
+          }
         ]
     , stories =
         [ { id = 101, title = "Login API", parentId = 11, iterationPath = "Contoso\\ART\\PI-2025-1\\Sprint 1", state = "Active" }
@@ -100,5 +106,6 @@ sample =
         , { id = 204, title = "Metrics probe", parentId = 22, iterationPath = "Contoso\\ART\\PI-2024-4\\Sprint 2", state = "New" } -- OutsidePI
         , { id = 301, title = "Report engine", parentId = 33, iterationPath = "Contoso\\ART\\PI-2025-1\\Sprint 2", state = "Active" }
         , { id = 302, title = "Export CSV", parentId = 33, iterationPath = "Contoso\\ART\\PI-2025-1\\Sprint 4", state = "New" }
+        , { id = 401, title = "Export json", parentId = 44, iterationPath = "Contoso\\ART\\PI-2025-1\\Sprint 2", state = "New" }
         ]
     }

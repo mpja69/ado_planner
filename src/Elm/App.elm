@@ -1,6 +1,7 @@
 module App exposing (main)
 
 import Browser
+import Components.Rails exposing (..)
 import Data.Ado as Ado
 import Data.Translate as T
 import Dict exposing (Dict)
@@ -9,15 +10,12 @@ import Html.Attributes as A
 import Html.Events
 import Json.Decode
 import Set exposing (Set)
-import Svg exposing (Svg, svg)
-import Svg.Attributes as SA
 import Time exposing (Posix)
 import Types exposing (..)
 
 
 
 -- TODO:
--- Add status to features
 -- Add planning of of stories without Feature
 -- Maybe have specific rows for our decided ToW, Type of Work
 --    Technical Improvements
@@ -301,12 +299,26 @@ canInteract mode =
         Active ->
             True
 
+        -- 🔒 Expanded-but-done rows are read-only
         DoneExpanded ->
-            True
+            False
 
-        -- allow interaction when user explicitly unlocked
+        -- compact rows are also read-only
         DoneCompact ->
             False
+
+
+
+-- Only include attributes when `cond` is true
+
+
+attrsIf : Bool -> List (Html.Attribute Msg) -> List (Html.Attribute Msg)
+attrsIf cond attrs =
+    if cond then
+        attrs
+
+    else
+        []
 
 
 isMismatchClosedFeature : FeatureRow -> Bool
@@ -671,9 +683,15 @@ sprintCell model row ix =
         isGhostDelivery : Bool
         isGhostDelivery =
             model.draggingDelivery == Just row.featureId
+
+        mode =
+            rowMode model row
+
+        can =
+            canInteract mode
     in
-    div (A.class (baseClass ++ colorClass ++ forbidClass) :: (storyHandlers ++ deliveryHandlers))
-        (List.map (\s -> storyCard (isGhostStory s) s) storiesHere
+    div (A.class (baseClass ++ colorClass ++ forbidClass) :: attrsIf can (storyHandlers ++ deliveryHandlers))
+        (List.map (\s -> storyCard (isGhostStory s) can s) storiesHere
             ++ (if isDeliveryHere then
                     [ featureCard isGhostDelivery
                         (if hasStoryAfterDelivery row then
@@ -682,6 +700,7 @@ sprintCell model row ix =
                          else
                             NoWarn
                         )
+                        can
                         row
                     ]
 
@@ -692,8 +711,8 @@ sprintCell model row ix =
         )
 
 
-storyCard : Bool -> Story -> Html Msg
-storyCard isGhost s =
+storyCard : Bool -> Bool -> Story -> Html Msg
+storyCard isGhost isInteractive s =
     let
         ( bg, fg ) =
             case s.status of
@@ -713,8 +732,6 @@ storyCard isGhost s =
             else
                 ""
 
-        -- compute badge (if any), but do not place it inline with the title;
-        -- we'll render it in a right-aligned container
         badgeView : Html Msg
         badgeView =
             case s.iteration of
@@ -742,44 +759,32 @@ storyCard isGhost s =
                 InPI _ ->
                     text ""
     in
-    -- outer: a single row with left group (rail+title) and right group (badge)
     div
-        [ A.class ("min-w-0 flex items-center justify-between gap-2 pl-1 pr-2 py-1 rounded-lg border select-none " ++ bg ++ " " ++ fg ++ ghostClass)
-        , A.title s.title
-        , A.attribute "draggable" "true"
-        , A.attribute "ondragstart" "event.dataTransfer.effectAllowed='move'; event.dataTransfer.dropEffect='move'"
-        , A.attribute "ondragover" "event.preventDefault(); event.dataTransfer.dropEffect='move'"
-        , Html.Events.on "dragstart" (Json.Decode.succeed (StoryDragStart s.id))
-        , Html.Events.on "dragend" (Json.Decode.succeed StoryDragEnd)
-        ]
-        [ -- LEFT GROUP: rail + title (kept together, truncates nicely)
+        ([ A.class ("min-w-0 flex items-center justify-between gap-2 pl-1 pr-2 py-1 rounded-lg border select-none " ++ bg ++ " " ++ fg ++ ghostClass)
+         , A.title s.title
+         ]
+            ++ attrsIf isInteractive
+                [ A.attribute "draggable" "true"
+                , A.attribute "ondragstart" "event.dataTransfer.effectAllowed='move'; event.dataTransfer.dropEffect='move'"
+                , A.attribute "ondragover" "event.preventDefault(); event.dataTransfer.dropEffect='move'"
+                , Html.Events.on "dragstart" (Json.Decode.succeed (StoryDragStart s.id))
+                , Html.Events.on "dragend" (Json.Decode.succeed StoryDragEnd)
+                ]
+        )
+        [ -- LEFT: rail + title (truncates nicely)
           div [ A.class "min-w-0 inline-flex items-center gap-1.5" ]
-            [ dotRailPx
-                { widthPx = 15
-                , heightPx = 20
-                , padLeftPx = 2
-                , padTopPx = 5 -- centers 3 rows in 20px
-                , cols = 2
-                , rows = 3 -- story: 3 dots high
-                , dotDiameterPx = 2
-                , gapXPx = 4
-                , gapYPx = 2
-                , dotColor = "rgba(99,102,241,0.50)"
-                , bgColor = "transparent"
-                , rounded = True
-                , mode = Regular
-                }
+            [ dotRailPx (railSpec Small Regular)
             , span [ A.class "font-medium truncate text-[13px]" ] [ text s.title ]
             ]
-        , -- RIGHT GROUP: warning badge (if empty, takes no space)
+        , -- RIGHT: warning badge (if any)
           div [ A.class "flex items-center shrink-0" ] [ badgeView ]
         ]
 
 
-featureCard : Bool -> FeatureWarn -> FeatureRow -> Html Msg
-featureCard isGhost warnKind row =
+featureCard : Bool -> FeatureWarn -> Bool -> FeatureRow -> Html Msg
+featureCard isGhost warnKind isInteractive row =
     let
-        -- 1) Visuals: ghosting + borders
+        -- visuals
         ghostClass =
             if isGhost then
                 " opacity-30 saturate-50"
@@ -798,7 +803,6 @@ featureCard isGhost warnKind row =
                 NoWarn ->
                     " border-indigo-300"
 
-        -- 2) Status pill (Todo/Doing/Done)
         ( statusLabel, statusCls ) =
             case row.status of
                 Todo ->
@@ -818,7 +822,6 @@ featureCard isGhost warnKind row =
                 ]
                 [ text statusLabel ]
 
-        -- 3) Warning badge
         warnBadgeView : Html Msg
         warnBadgeView =
             case warnKind of
@@ -838,79 +841,38 @@ featureCard isGhost warnKind row =
 
                 NoWarn ->
                     text ""
-
-        -- 4) Interactions disabled when Done (#4)
-        isDisabled : Bool
-        isDisabled =
-            row.status == Done
-
-        dragAttrs : List (Html.Attribute Msg)
-        dragAttrs =
-            if isDisabled then
-                []
-
-            else
+    in
+    div
+        ([ A.class ("mt-1 rounded-xl border bg-indigo-50/70 text-indigo-900 select-none overflow-hidden " ++ borderColor ++ ghostClass) ]
+            ++ attrsIf isInteractive
                 [ A.attribute "draggable" "true"
                 , A.attribute "ondragstart" "event.dataTransfer.effectAllowed='move'; event.dataTransfer.dropEffect='move'"
                 , A.attribute "ondragover" "event.preventDefault(); event.dataTransfer.dropEffect='move'"
                 , Html.Events.on "dragstart" (Json.Decode.succeed (DeliveryDragStart row.featureId))
                 , Html.Events.on "dragend" (Json.Decode.succeed DeliveryDragEnd)
                 ]
-
-        disabledCardClass =
-            if isDisabled then
-                " opacity-60 cursor-not-allowed"
-
-            else
-                ""
-
-        chipsWrapperClass =
-            if isDisabled then
-                "pointer-events-none opacity-80"
-
-            else
-                ""
-    in
-    div
-        ([ A.class ("mt-1 rounded-xl border bg-indigo-50/70 text-indigo-900 select-none overflow-hidden " ++ borderColor ++ ghostClass ++ disabledCardClass) ]
-            ++ dragAttrs
         )
-        [ -- ROW: rail + content as siblings
+        [ -- ROW: rail + content
           div [ A.class "flex items-stretch" ]
-            [ -- left rail (visual handle)
+            [ -- left rail
               div [ A.class "ml-2 self-center" ]
-                [ dotRailPx
-                    { widthPx = 15
-                    , heightPx = 20
-                    , padLeftPx = 2
-                    , padTopPx = 1
-                    , cols = 2
-                    , rows = 5
-                    , dotDiameterPx = 2
-                    , gapXPx = 4
-                    , gapYPx = 2
-                    , dotColor = "rgba(99,102,241,0.50)"
-                    , bgColor = "transparent"
-                    , rounded = True
-                    , mode = Regular
-                    }
+                [ dotRailPx (railSpec Medium Regular)
                 ]
             , -- content
               div [ A.class "flex-1 pl-1 pr-2 py-2 min-w-0" ]
-                [ -- row 1: title + status + warning badge
+                [ -- row 1: title + status + warn
                   div [ A.class "flex items-center justify-between gap-2 min-w-0" ]
                     [ span [ A.class "text-[13px] font-semibold truncate" ] [ text row.title ]
                     , div [ A.class "flex items-center gap-1 shrink-0" ]
                         [ statusPill, warnBadgeView ]
                     ]
-
-                -- row 2: Delivery + test chips (chips disabled when Done)
-                , div [ A.class "mt-1 flex items-center justify-between gap-2 min-w-0" ]
+                , -- row 2: delivery + test chips
+                  div [ A.class "mt-1 flex items-center justify-between gap-2 min-w-0" ]
                     [ span [ A.class "text-[12px] text-indigo-900/80 font-medium" ] [ text "Delivery" ]
-                    , div [ A.class ("flex items-center gap-1 shrink-0 " ++ chipsWrapperClass) ]
-                        (testChip row.featureId SIT row.tests.sit
-                            ++ testChip row.featureId UAT row.tests.uat
-                            ++ testChip row.featureId E2E row.tests.e2e
+                    , div [ A.class "flex items-center gap-1 shrink-0" ]
+                        (testChip isInteractive row.featureId SIT row.tests.sit
+                            ++ testChip isInteractive row.featureId UAT row.tests.uat
+                            ++ testChip isInteractive row.featureId E2E row.tests.e2e
                         )
                     ]
                 ]
@@ -918,8 +880,8 @@ featureCard isGhost warnKind row =
         ]
 
 
-testChip : Int -> TestKind -> Bool -> List (Html Msg)
-testChip featureId testKind isActive =
+testChip : Bool -> Int -> TestKind -> Bool -> List (Html Msg)
+testChip isInteractive featureId testKind isActive =
     let
         label =
             case testKind of
@@ -952,184 +914,9 @@ testChip featureId testKind isActive =
                 inactiveBase ++ " " ++ inactiveHover
     in
     [ span
-        [ A.class ("inline-flex items-center justify-center px-[3px] py-0 rounded-full border text-[8px] cursor-pointer select-none transition " ++ cls)
-        , Html.Events.onClick (ToggleTest featureId testKind)
-        ]
+        ([ A.class ("inline-flex items-center justify-center px-[3px] py-0 rounded-full border text-[8px] cursor-pointer select-none transition " ++ cls) ]
+            ++ attrsIf isInteractive
+                [ Html.Events.onClick (ToggleTest featureId testKind) ]
+        )
         [ text label ]
     ]
-
-
-type PatternMode
-    = Regular
-    | Staggered
-
-
-type alias RailSpecPx =
-    { widthPx : Int
-    , heightPx : Int
-    , padLeftPx : Int
-    , padTopPx : Int
-    , cols : Int
-    , rows : Int
-    , dotDiameterPx : Int
-    , gapXPx : Int
-    , gapYPx : Int
-    , dotColor : String
-    , bgColor : String
-    , rounded : Bool
-    , mode : PatternMode
-    }
-
-
-
--- Absolute-pixel rail: 1 SVG unit == 1 CSS pixel. No scaling.
-
-
-dotRailPx : RailSpecPx -> Html msg
-dotRailPx p =
-    let
-        w =
-            max 1 p.widthPx
-
-        h =
-            max 1 p.heightPx
-
-        pl =
-            max 0 p.padLeftPx
-
-        pt =
-            max 0 p.padTopPx
-
-        cols =
-            max 1 p.cols
-
-        rows =
-            max 1 p.rows
-
-        d =
-            max 1 p.dotDiameterPx
-
-        r =
-            d // 2
-
-        gx =
-            max 0 p.gapXPx
-
-        gy =
-            max 0 p.gapYPx
-
-        cellW =
-            d + gx
-
-        cellH =
-            d + gy
-
-        startX =
-            pl + r
-
-        startY =
-            pt + r
-
-        range n =
-            List.range 0 (n - 1)
-
-        circlesRegular : List (Svg msg)
-        circlesRegular =
-            range cols
-                |> List.concatMap
-                    (\c ->
-                        let
-                            cx =
-                                startX + c * cellW
-                        in
-                        range rows
-                            |> List.map
-                                (\rIdx ->
-                                    let
-                                        cy =
-                                            startY + rIdx * cellH
-                                    in
-                                    Svg.circle
-                                        [ SA.cx (String.fromInt cx)
-                                        , SA.cy (String.fromInt cy)
-                                        , SA.r (String.fromInt r)
-                                        , SA.fill p.dotColor
-                                        ]
-                                        []
-                                )
-                    )
-
-        circlesStaggered : List (Svg msg)
-        circlesStaggered =
-            range cols
-                |> List.concatMap
-                    (\c ->
-                        let
-                            cx =
-                                startX + c * cellW
-
-                            isOdd =
-                                modBy 2 c == 1
-
-                            rowsHere =
-                                if isOdd then
-                                    max 0 (rows - 1)
-
-                                else
-                                    rows
-
-                            shiftY =
-                                if isOdd then
-                                    cellH // 2
-
-                                else
-                                    0
-                        in
-                        range rowsHere
-                            |> List.map
-                                (\rIdx ->
-                                    let
-                                        cy =
-                                            startY + shiftY + rIdx * cellH
-                                    in
-                                    Svg.circle
-                                        [ SA.cx (String.fromInt cx)
-                                        , SA.cy (String.fromInt cy)
-                                        , SA.r (String.fromInt r)
-                                        , SA.fill p.dotColor
-                                        ]
-                                        []
-                                )
-                    )
-
-        circles_ =
-            case p.mode of
-                Regular ->
-                    circlesRegular
-
-                Staggered ->
-                    circlesStaggered
-
-        roundedCls =
-            if p.rounded then
-                " rounded-l-xl"
-
-            else
-                ""
-    in
-    -- Outer container: fixed px, no scaling
-    div
-        [ A.class ("relative shrink-0" ++ roundedCls)
-        , A.style "width" (String.fromInt w ++ "px")
-        , A.style "height" (String.fromInt h ++ "px")
-        , A.style "backgroundColor" p.bgColor
-        , A.attribute "aria-hidden" "true"
-        ]
-        [ svg
-            [ SA.viewBox ("0 0 " ++ String.fromInt w ++ " " ++ String.fromInt h)
-            , SA.width (String.fromInt w)
-            , SA.height (String.fromInt h)
-            , SA.shapeRendering "geometricPrecision"
-            ]
-            circles_
-        ]
