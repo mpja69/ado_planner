@@ -93,13 +93,13 @@ sample =
           , title = "Feature D"
           , iterationPath = "Contoso\\ART\\PI-2025-1\\Sprint 3" -- WholePI
           , state = "Closed"
-          , tags = []
+          , tags = [ "SIT" ]
           }
         , { id = 55
           , title = "Feature E"
           , iterationPath = "Contoso\\ART\\PI-2025-1\\Sprint 3" -- WholePI
           , state = "Closed"
-          , tags = []
+          , tags = [ "UAT", "E2E" ]
           }
         ]
     , stories =

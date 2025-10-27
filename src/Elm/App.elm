@@ -272,10 +272,6 @@ hasStoryAfterDelivery row =
                     )
 
 
-
--- NEW
-
-
 selectWarnKind : FeatureRow -> FeatureWarn
 selectWarnKind row =
     if row.status == Done then
@@ -378,6 +374,19 @@ canInteract mode =
             False
 
 
+rowTintClass : Model -> FeatureRow -> String
+rowTintClass model row =
+    case rowMode model row of
+        Active ->
+            " bg-white"
+
+        DoneExpanded ->
+            " bg-emerald-50/50"
+
+        DoneCompact ->
+            " bg-emerald-50/50"
+
+
 
 -- Only include attributes when `cond` is true
 
@@ -391,33 +400,19 @@ attrsIf cond attrs =
         []
 
 
-isMismatchClosedFeature : FeatureRow -> Bool
-isMismatchClosedFeature row =
-    row.status
-        == Done
-        && List.any (\s -> s.status /= Done) row.stories
-
-
-closedSprintIx : Model -> FeatureRow -> Maybe Int
-closedSprintIx model row =
-    case row.closedDate of
-        Nothing ->
-            Nothing
-
-        Just posix ->
-            dateToSprint model posix
-
-
 
 -- Stub: fill in using your PI boundaries/cadence later
-
-
-dateToSprint : Model -> Posix -> Maybe Int
-dateToSprint _ _ =
-    Nothing
-
-
-
+-- closedSprintIx : Model -> FeatureRow -> Maybe Int
+-- closedSprintIx model row =
+--     case row.closedDate of
+--         Nothing ->
+--             Nothing
+--
+--         Just posix ->
+--             dateToSprint model posix
+-- dateToSprint : Model -> Posix -> Maybe Int
+-- dateToSprint _ _ =
+--     Nothing
 -- VIEW
 
 
@@ -473,10 +468,10 @@ headerRow n =
         )
 
 
-featureHeader : RowMode -> FeatureRow -> Html Msg
-featureHeader mode row =
+featureHeader : RowMode -> FeatureRow -> List (Html Msg) -> Html Msg
+featureHeader mode row rightExtras =
     let
-        -- title size differs a bit in compact vs expanded
+        -- smaller title in compact mode
         titleCls =
             case mode of
                 DoneCompact ->
@@ -510,135 +505,124 @@ featureHeader mode row =
                 Active ->
                     text ""
     in
-    -- inner header row: title left, chevron right
-    div [ A.class "flex items-center justify-between gap-2 min-w-0" ]
+    -- Title (left) · right-extras (middle) · Chevron (right)
+    div [ A.class "flex items-center gap-2 min-w-0" ]
         [ span [ A.class titleCls, A.title row.title ] [ text row.title ]
+        , div [ A.class "ml-auto inline-flex items-center gap-2" ] rightExtras
         , chevronView
         ]
 
 
+statusPill : FeatureRow -> Html Msg
+statusPill row =
+    let
+        ( statusLabel, statusCls ) =
+            case row.status of
+                Todo ->
+                    ( "Todo", "bg-slate-100 border-slate-200 text-slate-700" )
+
+                Doing ->
+                    ( "Doing", "bg-sky-100 border-sky-200 text-sky-900" )
+
+                Done ->
+                    ( "Done", "bg-emerald-100 border-emerald-200 text-emerald-900" )
+    in
+    span
+        [ A.class ("inline-flex items-center px-1.5 py-0.5 rounded-md border text-[10px] " ++ statusCls)
+        , A.title ("Feature status: " ++ statusLabel)
+        ]
+        [ text statusLabel ]
+
+
 
 -- Compact view ------------------------------
+-- Small helpers (pure, composable)
+
+
+maybeTestStrip : FeatureRow -> Maybe (Html Msg)
+maybeTestStrip row =
+    let
+        dot : String -> Html Msg
+        dot lbl =
+            span
+                [ A.class "inline-flex items-center justify-center px-1 py-0 rounded-md border border-indigo-300 bg-indigo-50 text-indigo-700 text-[9px] font-medium" ]
+                [ text lbl ]
+
+        chips =
+            (if row.tests.sit then
+                [ dot "SIT" ]
+
+             else
+                []
+            )
+                ++ (if row.tests.uat then
+                        [ dot "UAT" ]
+
+                    else
+                        []
+                   )
+                ++ (if row.tests.e2e then
+                        [ dot "E2E" ]
+
+                    else
+                        []
+                   )
+    in
+    if List.isEmpty chips then
+        Nothing
+
+    else
+        Just (div [ A.class "inline-flex items-center gap-1" ] chips)
+
+
+maybeWarnChip : FeatureRow -> Maybe (Html Msg)
+maybeWarnChip row =
+    case selectWarnKind row of
+        WarnNeedsDelivery ->
+            Just <|
+                span
+                    [ A.class "inline-flex items-center gap-1 px-1 py-0 rounded-md border border-amber-300 bg-amber-50 text-amber-800 text-[9px]" ]
+                    [ text "⚠ set delivery" ]
+
+        WarnStoriesNotDone ->
+            Just <|
+                span
+                    [ A.class "inline-flex items-center gap-1 px-1 py-0 rounded-md border border-rose-300 bg-rose-50 text-rose-800 text-[9px]" ]
+                    [ text "⚠ stories" ]
+
+        _ ->
+            Nothing
+
+
+
+-- Compact header right-side extras (status first, then optional bits)
+
+
+compactRightExtras : FeatureRow -> Html Msg
+compactRightExtras row =
+    let
+        pieces : List (Html Msg)
+        pieces =
+            [ maybeTestStrip row
+            , maybeWarnChip row
+            ]
+                |> List.filterMap identity
+    in
+    div [ A.class "inline-flex items-center gap-2" ] (statusPill row :: pieces)
 
 
 featureRowViewDoneCompact : Model -> FeatureRow -> List (Html Msg)
 featureRowViewDoneCompact model row =
     let
-        -- tiny active test chips
-        testDot : String -> Html Msg
-        testDot lbl =
-            span
-                [ A.class "inline-flex items-center justify-center px-1 py-0 rounded-md border border-indigo-300 bg-indigo-50 text-indigo-700 text-[9px] font-medium" ]
-                [ text lbl ]
-
-        testStrip : Html Msg
-        testStrip =
-            let
-                chips =
-                    (if row.tests.sit then
-                        [ testDot "SIT" ]
-
-                     else
-                        []
-                    )
-                        ++ (if row.tests.uat then
-                                [ testDot "UAT" ]
-
-                            else
-                                []
-                           )
-                        ++ (if row.tests.e2e then
-                                [ testDot "E2E" ]
-
-                            else
-                                []
-                           )
-            in
-            if List.isEmpty chips then
-                text ""
-
-            else
-                div [ A.class "inline-flex items-center gap-1" ] chips
-
-        needsDelivery : Bool
-        needsDelivery =
-            row.delivery == Nothing
-
-        warnStories : Bool
-        warnStories =
-            row.status == Done && hasUnfinishedStories row
-
-        warnChip : Html Msg
-        warnChip =
-            if needsDelivery then
-                span
-                    [ A.class "inline-flex items-center gap-1 px-1 py-0 rounded-md border border-amber-300 bg-amber-50 text-amber-800 text-[9px]" ]
-                    [ text "⚠ set delivery" ]
-
-            else if warnStories then
-                span
-                    [ A.class "inline-flex items-center gap-1 px-1 py-0 rounded-md border border-rose-300 bg-rose-50 text-rose-800 text-[9px]" ]
-                    [ text "⚠ stories" ]
-
-            else
-                text ""
-
-        -- delivery marker (green), wrapped with red border when any story is unfinished
-        deliveryTiny : Html Msg
-        deliveryTiny =
-            case row.delivery of
-                Just _ ->
-                    let
-                        redBorder =
-                            if hasUnfinishedStories row then
-                                " border border-rose-400 p-[1px] "
-
-                            else
-                                ""
-                    in
-                    span [ A.class ("inline-flex items-center justify-center rounded-full " ++ redBorder) ]
-                        [ span [ A.class "inline-block w-2 h-2 rounded-full bg-emerald-500" ] [] ]
-
-                Nothing ->
-                    text ""
-
         featureCellCompact : FeatureRow -> Html Msg
         featureCellCompact r =
             div
-                [ A.class "px-2 py-1 rounded-xl bg-emerald-50/50 border border-emerald-300 text-emerald-950 flex items-center gap-2 sticky left-0 z-10"
+                [ A.class "px-2 py-1 rounded-xl bg-emerald-50/50 border border-emerald-300 text-emerald-950 sticky left-0 z-10"
                 , A.style "backdrop-filter" "blur(2px)"
                 ]
-                [ -- title (left)
-                  span
-                    [ A.class "text-[11px] font-semibold truncate"
-                    , A.title r.title
-                    ]
-                    [ text r.title ]
-                , -- indicator strip (middle/right)
-                  div [ A.class "ml-auto inline-flex items-center gap-2" ]
-                    ([ deliveryTiny ]
-                        ++ (if testStrip == text "" then
-                                []
+                [ featureHeader DoneCompact r [] ]
 
-                            else
-                                [ testStrip ]
-                           )
-                        ++ (if warnChip == text "" then
-                                []
-
-                            else
-                                [ warnChip ]
-                           )
-                    )
-                , -- chevron (right)
-                  span
-                    [ A.class "inline-flex items-center justify-center w-5 h-5 rounded-md bg-white/60 border border-emerald-200 cursor-pointer select-none"
-                    , Html.Events.onClick (UnlockRow r.featureId)
-                    , A.title "Expand row"
-                    ]
-                    [ text "▾" ]
-                ]
-
+        -- [ featureHeader DoneCompact r [ compactRightExtras r ] ]
         cells : List (Html Msg)
         cells =
             List.map (\ix -> compactSprintCell model row ix)
@@ -650,76 +634,59 @@ featureRowViewDoneCompact model row =
 compactSprintCell : Model -> FeatureRow -> Int -> Html Msg
 compactSprintCell model row ix =
     let
-        hasUnfinishedHere =
-            hasUnfinishedStoriesInSprint row ix
+        toneCls =
+            rowTintClass model row
 
+        baseCls =
+            "px-2 py-1 rounded-lg border text-[12px] flex items-center justify-center" ++ toneCls
+
+        -- hasUnfinishedHere =
+        --     hasUnfinishedStoriesInSprint row ix
         isDeliveryHere =
             row.delivery == Just ix
 
-        baseCls =
-            "px-1.5 py-1 rounded-lg border border-slate-200 bg-white min-h-[28px] flex items-center justify-center"
-
         -- The delivery green dot; we emulate a “ring” by wrapping in a red bordered capsule when row has any unfinished.
-        deliveryView : Html Msg
-        deliveryView =
-            if row.status == Done && isDeliveryHere then
-                let
-                    hasAnyUnfinished =
-                        hasUnfinishedStories row
-
-                    wrapperCls =
-                        if hasAnyUnfinished then
-                            "inline-flex items-center justify-center rounded-full border border-rose-400 p-[1px]"
-
-                        else
-                            "inline-flex items-center justify-center"
-                in
-                span [ A.class wrapperCls, A.title "Feature delivered here" ]
-                    [ span [ A.class "inline-block w-2.5 h-2.5 rounded-full bg-emerald-500" ] [] ]
-
-            else
-                text ""
-
-        unfinishedBadge : Html Msg
-        unfinishedBadge =
-            if hasUnfinishedHere then
-                span
-                    [ A.class "inline-flex items-center justify-center w-4 h-4 rounded-full text-[10px] font-bold text-white bg-rose-500"
-                    , A.title "Unfinished story in this sprint"
-                    ]
-                    [ text "!" ]
-
-            else
-                text ""
+        -- deliveryView : Html Msg
+        -- deliveryView =
+        --     if row.status == Done && isDeliveryHere then
+        --         let
+        --             hasAnyUnfinished =
+        --                 hasUnfinishedStories row
+        --
+        --             wrapperCls =
+        --                 if hasAnyUnfinished then
+        --                     "inline-flex items-center justify-center rounded-full border border-rose-400 p-[1px]"
+        --
+        --                 else
+        --                     "inline-flex items-center justify-center"
+        --         in
+        --         span [ A.class wrapperCls, A.title "Feature delivered here" ]
+        --             [ span [ A.class "inline-block w-2.5 h-2.5 rounded-full bg-emerald-500" ] [] ]
+        --
+        --     else
+        --         text ""
+        -- unfinishedBadge : Html Msg
+        -- unfinishedBadge =
+        --     if hasUnfinishedHere then
+        --         span
+        --             [ A.class "inline-flex items-center justify-center w-4 h-4 rounded-full text-[10px] font-bold text-white bg-rose-500"
+        --             , A.title "Unfinished story in this sprint"
+        --             ]
+        --             [ text "!" ]
+        --
+        --     else
+        --         text ""
     in
     div [ A.class baseCls ]
-        (if row.status == Done && isDeliveryHere then
-            [ deliveryView ]
-
-         else if hasUnfinishedHere then
-            [ unfinishedBadge ]
+        (if isDeliveryHere then
+            [ compactRightExtras row ]
+            -- [ deliveryView ]
+            -- else if hasUnfinishedHere then
+            --    [ unfinishedBadge ]
 
          else
             [ text "" ]
         )
-
-
-doneHereDotCompact : Html Msg
-doneHereDotCompact =
-    span
-        [ A.class "inline-block w-2 h-2 rounded-full bg-emerald-500"
-        , A.title "Delivered here"
-        ]
-        []
-
-
-warnMismatchDotCompact : Html Msg
-warnMismatchDotCompact =
-    span
-        [ A.class "inline-flex items-center justify-center w-4 h-4 rounded-full border border-amber-300 bg-amber-50 text-amber-700 text-[10px] leading-none"
-        , A.title "Closed date does not match Iteration Path"
-        ]
-        [ text "!" ]
 
 
 
@@ -739,33 +706,15 @@ featureRowView model row =
         warnKind =
             selectWarnKind row
 
+        -- INSIDE featureRowView, in the local `featureCell`:
         featureCell : Html Msg
         featureCell =
             let
+                baseCls : String
                 baseCls =
-                    "px-3 py-2 rounded-xl bg-slate-100/70 border border-slate-200 font-medium sticky left-0 z-10 transition"
-
-                toneCls =
-                    case mode of
-                        DoneExpanded ->
-                            " bg-emerald-50/60 border-emerald-200"
-
-                        _ ->
-                            ""
-
-                chevronView : Html Msg
-                chevronView =
-                    case mode of
-                        DoneExpanded ->
-                            span
-                                [ A.class "inline-flex items-center justify-center w-5 h-5 rounded-md bg-white/60 border border-emerald-200 cursor-pointer select-none"
-                                , Html.Events.onClick (LockRow row.featureId)
-                                , A.title "Collapse row"
-                                ]
-                                [ text "▴" ]
-
-                        _ ->
-                            text ""
+                    "px-3 py-2 rounded-xl border font-medium sticky left-0 z-10 transition "
+                        ++ rowTintClass model row
+                        ++ " border-slate-200"
 
                 -- “Unscheduled” tray (Missing / WholePI / OutsidePI stories)
                 tray : List (Html Msg)
@@ -796,17 +745,10 @@ featureRowView model row =
                             []
             in
             div
-                [ A.class (baseCls ++ toneCls)
+                [ A.class baseCls
                 , A.style "backdrop-filter" "blur(2px)"
                 ]
-                ([ div [ A.class "flex items-center justify-between gap-2 min-w-0" ]
-                    [ span [ A.class "text-[12px] font-semibold truncate" ] [ text row.title ]
-                    , chevronView
-                    ]
-                 ]
-                    ++ maybeFeatureCard
-                    ++ tray
-                )
+                (featureHeader mode row [] :: maybeFeatureCard ++ tray)
 
         cells : List (Html Msg)
         cells =
@@ -846,6 +788,17 @@ sprintCell model row ix =
         isDeliveryHere =
             row.delivery == Just ix
 
+        -- 2) Visuals -------------------------------------------------
+        toneCls =
+            rowTintClass model row
+
+        baseClass : String
+        baseClass =
+            "min-w-0 px-3 py-2 rounded-xl border min-h-[84px] flex flex-col gap-1 transition " ++ toneCls
+
+        -- colorClass : String
+        -- colorClass =
+        --     "bg-white border-slate-200 "
         emptyHint : List (Html Msg)
         emptyHint =
             if List.isEmpty storiesHere && not isDeliveryHere then
@@ -854,28 +807,13 @@ sprintCell model row ix =
             else
                 []
 
-        -- 2) Visuals -------------------------------------------------
-        baseClass : String
-        baseClass =
-            "min-w-0 px-3 py-2 rounded-xl border min-h-[84px] flex flex-col gap-1 transition "
-
-        colorClass : String
-        colorClass =
-            "bg-white border-slate-200 "
-
-        -- ✅ whole-row tint when expanded-done (read-only)
-        doneTint : String
-        doneTint =
-            case mode of
-                DoneExpanded ->
-                    "bg-emerald-50/40 "
-
-                _ ->
-                    ""
-
         forbidClass : String
         forbidClass =
-            ""
+            if can then
+                ""
+
+            else
+                " cursor-not-allowed"
 
         -- keep/extend your own “forbidden” styling if needed
         -- 3) Warn kind (after/delivery/stories-not-done) -------------
@@ -944,7 +882,8 @@ sprintCell model row ix =
             False
     in
     div
-        (A.class (baseClass ++ colorClass ++ doneTint ++ forbidClass)
+        (A.class
+            (baseClass ++ forbidClass)
             -- 👉 Row-level gate: attaches ALL handlers only when row is interactive
             :: attrsIf can (storyHandlers ++ deliveryHandlers)
         )
@@ -960,7 +899,7 @@ sprintCell model row ix =
 
 
 storyCard : Bool -> Bool -> Story -> Html Msg
-storyCard isGhost isInteractive s =
+storyCard isGhost can s =
     let
         ( bg, fg ) =
             case s.status of
@@ -1006,31 +945,50 @@ storyCard isGhost isInteractive s =
 
                 InPI _ ->
                     text ""
-    in
-    div
-        ([ A.class ("min-w-0 flex items-center justify-between gap-2 pl-1 pr-2 py-1 rounded-lg border select-none " ++ bg ++ " " ++ fg ++ ghostClass)
-         , A.title s.title
-         ]
-            ++ attrsIf isInteractive
+
+        dragAttrs : List (Html.Attribute Msg)
+        dragAttrs =
+            if can then
                 [ A.attribute "draggable" "true"
                 , A.attribute "ondragstart" "event.dataTransfer.effectAllowed='move'; event.dataTransfer.dropEffect='move'"
                 , A.attribute "ondragover" "event.preventDefault(); event.dataTransfer.dropEffect='move'"
                 , Html.Events.on "dragstart" (Json.Decode.succeed (StoryDragStart s.id))
                 , Html.Events.on "dragend" (Json.Decode.succeed StoryDragEnd)
                 ]
+
+            else
+                []
+
+        disabledCls =
+            if can then
+                ""
+
+            else
+                " opacity-60 cursor-not-allowed"
+    in
+    div
+        ([ A.class ("min-w-0 flex items-center justify-between gap-2 pl-1 pr-2 py-1 rounded-lg border select-none " ++ bg ++ " " ++ fg ++ ghostClass ++ disabledCls)
+         , A.title s.title
+         ]
+            ++ dragAttrs
         )
         [ -- LEFT: rail + title (truncates nicely)
           div [ A.class "min-w-0 inline-flex items-center gap-1.5" ]
-            [ dotRailPx (railSpec Small Regular)
-            , span [ A.class "font-medium truncate text-[13px]" ] [ text s.title ]
-            ]
+            (if can then
+                [ dotRailPx (railSpec Small Regular)
+                , span [ A.class "font-medium truncate text-[13px]" ] [ text s.title ]
+                ]
+
+             else
+                [ span [ A.class "font-medium truncate text-[13px]" ] [ text s.title ] ]
+            )
         , -- RIGHT: warning badge (if any)
           div [ A.class "flex items-center shrink-0" ] [ badgeView ]
         ]
 
 
 featureCard : Bool -> FeatureWarn -> Bool -> FeatureRow -> Html Msg
-featureCard isGhost warnKind isInteractive row =
+featureCard isGhost warnKind can row =
     let
         -- visuals
         ghostClass =
@@ -1053,25 +1011,6 @@ featureCard isGhost warnKind isInteractive row =
 
                 NoWarn ->
                     " border-indigo-300"
-
-        ( statusLabel, statusCls ) =
-            case row.status of
-                Todo ->
-                    ( "Todo", "bg-slate-100 border-slate-200 text-slate-700" )
-
-                Doing ->
-                    ( "Doing", "bg-sky-100 border-sky-200 text-sky-900" )
-
-                Done ->
-                    ( "Done", "bg-emerald-100 border-emerald-200 text-emerald-900" )
-
-        statusPill : Html Msg
-        statusPill =
-            span
-                [ A.class ("inline-flex items-center px-1.5 py-0.5 rounded-md border text-[10px] " ++ statusCls)
-                , A.title ("Feature status: " ++ statusLabel)
-                ]
-                [ text statusLabel ]
 
         warnBadgeView : Html Msg
         warnBadgeView =
@@ -1099,52 +1038,67 @@ featureCard isGhost warnKind isInteractive row =
 
                 NoWarn ->
                     text ""
-    in
-    div
-        ([ A.class ("mt-1 rounded-xl border bg-indigo-50/70 text-indigo-900 select-none overflow-hidden " ++ borderColor ++ ghostClass) ]
-            ++ attrsIf isInteractive
+
+        dragAttrs : List (Html.Attribute Msg)
+        dragAttrs =
+            if can then
                 [ A.attribute "draggable" "true"
                 , A.attribute "ondragstart" "event.dataTransfer.effectAllowed='move'; event.dataTransfer.dropEffect='move'"
                 , A.attribute "ondragover" "event.preventDefault(); event.dataTransfer.dropEffect='move'"
                 , Html.Events.on "dragstart" (Json.Decode.succeed (DeliveryDragStart row.featureId))
                 , Html.Events.on "dragend" (Json.Decode.succeed DeliveryDragEnd)
                 ]
+
+            else
+                []
+
+        disabledCardClass =
+            if can then
+                ""
+
+            else
+                " opacity-60 cursor-not-allowed"
+
+        chipsWrapperClass =
+            if can then
+                ""
+
+            else
+                "pointer-events-none opacity-80"
+    in
+    div
+        (A.class
+            ("mt-1 rounded-xl border bg-indigo-50/70 text-indigo-900 select-none overflow-hidden "
+                ++ borderColor
+                ++ ghostClass
+                ++ disabledCardClass
+            )
+            :: dragAttrs
         )
         [ -- ROW: rail + content
           div [ A.class "flex items-stretch" ]
             [ -- left rail (keep your existing rail call; you said you refactored it)
-              div [ A.class "ml-2 self-center" ]
-                [ dotRailPx
-                    { widthPx = 15
-                    , heightPx = 20
-                    , padLeftPx = 2
-                    , padTopPx = 1
-                    , cols = 2
-                    , rows = 5
-                    , dotDiameterPx = 2
-                    , gapXPx = 4
-                    , gapYPx = 2
-                    , dotColor = "rgba(99,102,241,0.50)"
-                    , bgColor = "transparent"
-                    , rounded = True
-                    , mode = Regular
-                    }
-                ]
+              if can then
+                div [ A.class "ml-2 self-center" ]
+                    [ dotRailPx (railSpec Medium Regular) ]
+
+              else
+                div [ A.class "ml-2" ] []
             , -- content
               div [ A.class "flex-1 pl-1 pr-2 py-2 min-w-0" ]
                 [ -- row 1: title + status + warn
                   div [ A.class "flex items-center justify-between gap-2 min-w-0" ]
                     [ span [ A.class "text-[13px] font-semibold truncate" ] [ text row.title ]
                     , div [ A.class "flex items-center gap-1 shrink-0" ]
-                        [ statusPill, warnBadgeView ]
+                        [ warnBadgeView ]
                     ]
                 , -- row 2: delivery + test chips
                   div [ A.class "mt-1 flex items-center justify-between gap-2 min-w-0" ]
-                    [ span [ A.class "text-[12px] text-indigo-900/80 font-medium" ] [ text "Delivery" ]
-                    , div [ A.class "flex items-center gap-1 shrink-0" ]
-                        (testChip isInteractive row.featureId SIT row.tests.sit
-                            ++ testChip isInteractive row.featureId UAT row.tests.uat
-                            ++ testChip isInteractive row.featureId E2E row.tests.e2e
+                    [ statusPill row -- span [ A.class "text-[12px] text-indigo-900/80 font-medium" ] [ text "Delivery" ]
+                    , div [ A.class ("flex items-center gap-1 shrink-0" ++ chipsWrapperClass) ]
+                        (testChip can row.featureId SIT row.tests.sit
+                            ++ testChip can row.featureId UAT row.tests.uat
+                            ++ testChip can row.featureId E2E row.tests.e2e
                         )
                     ]
                 ]
@@ -1152,108 +1106,8 @@ featureCard isGhost warnKind isInteractive row =
         ]
 
 
-
--- featureCard : Bool -> FeatureWarn -> Bool -> FeatureRow -> Html Msg
--- featureCard isGhost warnKind isInteractive row =
---     let
---         -- visuals
---         ghostClass =
---             if isGhost then
---                 " opacity-30 saturate-50"
---
---             else
---                 ""
---
---         borderColor =
---             case warnKind of
---                 WarnAfter ->
---                     " border-amber-400"
---
---                 WarnNeedsDelivery ->
---                     " border-amber-400"
---
---                 NoWarn ->
---                     " border-indigo-300"
---
---         ( statusLabel, statusCls ) =
---             case row.status of
---                 Todo ->
---                     ( "Todo", "bg-slate-100 border-slate-200 text-slate-700" )
---
---                 Doing ->
---                     ( "Doing", "bg-sky-100 border-sky-200 text-sky-900" )
---
---                 Done ->
---                     ( "Done", "bg-emerald-100 border-emerald-200 text-emerald-900" )
---
---         statusPill : Html Msg
---         statusPill =
---             span
---                 [ A.class ("inline-flex items-center px-1.5 py-0.5 rounded-md border text-[10px] " ++ statusCls)
---                 , A.title ("Feature status: " ++ statusLabel)
---                 ]
---                 [ text statusLabel ]
---
---         warnBadgeView : Html Msg
---         warnBadgeView =
---             case warnKind of
---                 WarnAfter ->
---                     span
---                         [ A.class "inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md border border-amber-300 bg-amber-50 text-amber-800 text-[10px] shrink-0"
---                         , A.title "One or more stories are scheduled after delivery"
---                         ]
---                         [ text "⚠︎ after" ]
---
---                 WarnNeedsDelivery ->
---                     span
---                         [ A.class "inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md border border-amber-300 bg-amber-50 text-amber-800 text-[10px] shrink-0"
---                         , A.title "Feature has no delivery sprint set"
---                         ]
---                         [ text "⚠︎ set delivery" ]
---
---                 NoWarn ->
---                     text ""
---     in
---     div
---         ([ A.class ("mt-1 rounded-xl border bg-indigo-50/70 text-indigo-900 select-none overflow-hidden " ++ borderColor ++ ghostClass) ]
---             ++ attrsIf isInteractive
---                 [ A.attribute "draggable" "true"
---                 , A.attribute "ondragstart" "event.dataTransfer.effectAllowed='move'; event.dataTransfer.dropEffect='move'"
---                 , A.attribute "ondragover" "event.preventDefault(); event.dataTransfer.dropEffect='move'"
---                 , Html.Events.on "dragstart" (Json.Decode.succeed (DeliveryDragStart row.featureId))
---                 , Html.Events.on "dragend" (Json.Decode.succeed DeliveryDragEnd)
---                 ]
---         )
---         [ -- ROW: rail + content
---           div [ A.class "flex items-stretch" ]
---             [ -- left rail
---               div [ A.class "ml-2 self-center" ]
---                 [ dotRailPx (railSpec Medium Regular)
---                 ]
---             , -- content
---               div [ A.class "flex-1 pl-1 pr-2 py-2 min-w-0" ]
---                 [ -- row 1: title + status + warn
---                   div [ A.class "flex items-center justify-between gap-2 min-w-0" ]
---                     [ span [ A.class "text-[13px] font-semibold truncate" ] [ text row.title ]
---                     , div [ A.class "flex items-center gap-1 shrink-0" ]
---                         [ statusPill, warnBadgeView ]
---                     ]
---                 , -- row 2: delivery + test chips
---                   div [ A.class "mt-1 flex items-center justify-between gap-2 min-w-0" ]
---                     [ span [ A.class "text-[12px] text-indigo-900/80 font-medium" ] [ text "Delivery" ]
---                     , div [ A.class "flex items-center gap-1 shrink-0" ]
---                         (testChip isInteractive row.featureId SIT row.tests.sit
---                             ++ testChip isInteractive row.featureId UAT row.tests.uat
---                             ++ testChip isInteractive row.featureId E2E row.tests.e2e
---                         )
---                     ]
---                 ]
---             ]
---         ]
-
-
 testChip : Bool -> Int -> TestKind -> Bool -> List (Html Msg)
-testChip isInteractive featureId testKind isActive =
+testChip can featureId testKind isActive =
     let
         label =
             case testKind of
@@ -1286,8 +1140,8 @@ testChip isInteractive featureId testKind isActive =
                 inactiveBase ++ " " ++ inactiveHover
     in
     [ span
-        ([ A.class ("inline-flex items-center justify-center px-[3px] py-0 rounded-full border text-[8px] cursor-pointer select-none transition " ++ cls) ]
-            ++ attrsIf isInteractive
+        (A.class ("inline-flex items-center justify-center px-[3px] py-0 rounded-full border text-[8px] cursor-pointer select-none transition " ++ cls)
+            :: attrsIf can
                 [ Html.Events.onClick (ToggleTest featureId testKind) ]
         )
         [ text label ]
