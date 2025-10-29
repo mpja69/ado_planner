@@ -12,6 +12,7 @@ import Json.Decode
 import Set exposing (Set)
 import Time exposing (Posix)
 import Types exposing (..)
+import Ui exposing (UiSize(..), cardToneForStatus, statusPill, storyIterationBadge, testChipView, testStripView, warnBadge)
 
 
 
@@ -29,7 +30,7 @@ import Types exposing (..)
 
 type alias Model =
     { sprintCount : Int
-    , rows : List FeatureRow
+    , rows : List Feature
     , draggingDelivery : Maybe Int
     , hoverDeliverySprint : Maybe Int
     , draggingStory : Maybe Int
@@ -51,7 +52,7 @@ init =
         ctx =
             T.buildPi "Contoso\\ART\\PI-2025-1" sprintNames
 
-        rowsFromAdo : List FeatureRow
+        rowsFromAdo : List Feature
         rowsFromAdo =
             T.translate ctx Ado.sample
     in
@@ -112,7 +113,7 @@ update msg model =
                         -- update the delivery in rows
                         updateRow r =
                             if r.featureId == fid then
-                                { r | delivery = Just newSprintIx }
+                                { r | iteration = InPI newSprintIx }
 
                             else
                                 r
@@ -213,7 +214,7 @@ update msg model =
 -- HELPERS
 
 
-toggleTest : Int -> TestKind -> FeatureRow -> FeatureRow
+toggleTest : Int -> TestKind -> Feature -> Feature
 toggleTest fid kind row =
     if row.featureId /= fid then
         row
@@ -237,7 +238,7 @@ toggleTest fid kind row =
         { row | tests = new }
 
 
-lastStorySprint : FeatureRow -> Int
+lastStorySprint : Feature -> Int
 lastStorySprint row =
     row.stories
         |> List.filterMap
@@ -253,29 +254,9 @@ lastStorySprint row =
         |> Maybe.withDefault 1
 
 
-hasStoryAfterDelivery : FeatureRow -> Bool
-hasStoryAfterDelivery row =
-    case row.delivery of
-        Nothing ->
-            False
-
-        Just d ->
-            row.stories
-                |> List.any
-                    (\s ->
-                        case s.iteration of
-                            InPI ix ->
-                                ix > d
-
-                            _ ->
-                                False
-                    )
-
-
-selectWarnKind : FeatureRow -> FeatureWarn
+selectWarnKind : Feature -> FeatureWarn
 selectWarnKind row =
     if row.status == Done then
-        -- Feature marked Done; if any story is not Done -> warn
         if List.any (\s -> s.status /= Done) row.stories then
             WarnStoriesNotDone
 
@@ -283,8 +264,14 @@ selectWarnKind row =
             NoWarn
 
     else
-        -- Feature NOT done
-        case row.delivery of
+    -- NEW: Feature kvar i Todo men någon story är > Todo
+    if
+        row.status == Todo && hasStoryBeyondTodo row
+    then
+        WarnFeatureLagging
+
+    else
+        case featureDeliverySprint row of
             Nothing ->
                 WarnNeedsDelivery
 
@@ -300,7 +287,7 @@ selectWarnKind row =
 -- Is there ANY unfinished story on the row?
 
 
-hasUnfinishedStories : FeatureRow -> Bool
+hasUnfinishedStories : Feature -> Bool
 hasUnfinishedStories row =
     row.stories |> List.any (\s -> s.status /= Done)
 
@@ -309,7 +296,7 @@ hasUnfinishedStories row =
 -- Is there ANY unfinished story specifically in sprint ix?
 
 
-hasUnfinishedStoriesInSprint : FeatureRow -> Int -> Bool
+hasUnfinishedStoriesInSprint : Feature -> Int -> Bool
 hasUnfinishedStoriesInSprint row ix =
     row.stories
         |> List.any
@@ -323,7 +310,7 @@ hasUnfinishedStoriesInSprint row ix =
             )
 
 
-unscheduledStories : FeatureRow -> List Story
+unscheduledStories : Feature -> List Story
 unscheduledStories row =
     row.stories
         |> List.filter
@@ -342,7 +329,7 @@ unscheduledStories row =
 -- Determine mode of a feature row based on its status and unlock state
 
 
-rowMode : Model -> FeatureRow -> RowMode
+rowMode : Model -> Feature -> RowMode
 rowMode model row =
     if row.status == Done then
         if Set.member row.featureId model.unlocked then
@@ -352,7 +339,7 @@ rowMode model row =
             DoneCompact
 
     else
-        Active
+        Open
 
 
 
@@ -362,7 +349,7 @@ rowMode model row =
 canInteract : RowMode -> Bool
 canInteract mode =
     case mode of
-        Active ->
+        Open ->
             True
 
         -- 🔒 Expanded-but-done rows are read-only
@@ -374,10 +361,10 @@ canInteract mode =
             False
 
 
-rowTintClass : Model -> FeatureRow -> String
+rowTintClass : Model -> Feature -> String
 rowTintClass model row =
     case rowMode model row of
-        Active ->
+        Open ->
             " bg-white"
 
         DoneExpanded ->
@@ -401,6 +388,58 @@ attrsIf cond attrs =
 
 
 
+-- NEW: extract sprint index from an Iteration -------------------
+
+
+iterationToSprint : Iteration -> Maybe Int
+iterationToSprint itn =
+    case itn of
+        InPI ix ->
+            Just ix
+
+        _ ->
+            Nothing
+
+
+
+-- NEW: feature's delivery sprint (if set)
+
+
+featureDeliverySprint : Feature -> Maybe Int
+featureDeliverySprint f =
+    iterationToSprint f.iteration
+
+
+
+-- UPDATE: was using row.delivery; now uses featureDeliverySprint
+
+
+hasStoryAfterDelivery : Feature -> Bool
+hasStoryAfterDelivery row =
+    case featureDeliverySprint row of
+        Nothing ->
+            False
+
+        Just d ->
+            row.stories
+                |> List.any
+                    (\s ->
+                        case s.iteration of
+                            InPI ix ->
+                                ix > d
+
+                            _ ->
+                                False
+                    )
+
+
+hasStoryBeyondTodo : Feature -> Bool
+hasStoryBeyondTodo row =
+    List.any (\s -> s.status /= Todo) row.stories
+
+
+
+-- ----------------------------------------------------------------
 -- Stub: fill in using your PI boundaries/cadence later
 -- closedSprintIx : Model -> FeatureRow -> Maybe Int
 -- closedSprintIx model row =
@@ -446,7 +485,7 @@ gridView model =
         )
 
 
-rowView : Model -> FeatureRow -> List (Html Msg)
+rowView : Model -> Feature -> List (Html Msg)
 rowView model row =
     case rowMode model row of
         DoneCompact ->
@@ -468,10 +507,14 @@ headerRow n =
         )
 
 
-featureHeader : RowMode -> FeatureRow -> List (Html Msg) -> Html Msg
-featureHeader mode row rightExtras =
+type HeaderLayout
+    = ChevronLeft
+    | ChevronRight
+
+
+featureHeader : HeaderLayout -> RowMode -> Feature -> List (Html Msg) -> Html Msg
+featureHeader layout mode row rightExtras =
     let
-        -- smaller title in compact mode
         titleCls =
             case mode of
                 DoneCompact ->
@@ -480,7 +523,6 @@ featureHeader mode row rightExtras =
                 _ ->
                     "text-[12px] font-semibold truncate"
 
-        -- chevron differs by mode
         chevronView : Html Msg
         chevronView =
             case mode of
@@ -502,127 +544,46 @@ featureHeader mode row rightExtras =
                         ]
                         [ text "▾" ]
 
-                Active ->
+                Open ->
                     text ""
     in
-    -- Title (left) · right-extras (middle) · Chevron (right)
-    div [ A.class "flex items-center gap-2 min-w-0" ]
-        [ span [ A.class titleCls, A.title row.title ] [ text row.title ]
-        , div [ A.class "ml-auto inline-flex items-center gap-2" ] rightExtras
-        , chevronView
-        ]
+    div [ A.class "flex items-center justify-between gap-2 min-w-0" ]
+        (case layout of
+            ChevronLeft ->
+                [ -- vänster: chevron + titel i en rad
+                  div [ A.class "min-w-0 inline-flex items-center gap-2" ]
+                    [ chevronView
+                    , span [ A.class titleCls, A.title row.title ] [ text row.title ]
+                    ]
+                , -- höger: extras (om några)
+                  div [ A.class "inline-flex items-center gap-2" ] rightExtras
+                ]
 
-
-statusPill : FeatureRow -> Html Msg
-statusPill row =
-    let
-        ( statusLabel, statusCls ) =
-            case row.status of
-                Todo ->
-                    ( "Todo", "bg-slate-100 border-slate-200 text-slate-700" )
-
-                Doing ->
-                    ( "Doing", "bg-sky-100 border-sky-200 text-sky-900" )
-
-                Done ->
-                    ( "Done", "bg-emerald-100 border-emerald-200 text-emerald-900" )
-    in
-    span
-        [ A.class ("inline-flex items-center px-1.5 py-0.5 rounded-md border text-[10px] " ++ statusCls)
-        , A.title ("Feature status: " ++ statusLabel)
-        ]
-        [ text statusLabel ]
+            ChevronRight ->
+                [ -- vänster: titel
+                  span [ A.class titleCls, A.title row.title ] [ text row.title ]
+                , -- höger: extras + chevron
+                  div [ A.class "inline-flex items-center gap-2" ]
+                    (rightExtras ++ [ chevronView ])
+                ]
+        )
 
 
 
 -- Compact view ------------------------------
--- Small helpers (pure, composable)
 
 
-maybeTestStrip : FeatureRow -> Maybe (Html Msg)
-maybeTestStrip row =
-    let
-        dot : String -> Html Msg
-        dot lbl =
-            span
-                [ A.class "inline-flex items-center justify-center px-1 py-0 rounded-md border border-indigo-300 bg-indigo-50 text-indigo-700 text-[9px] font-medium" ]
-                [ text lbl ]
-
-        chips =
-            (if row.tests.sit then
-                [ dot "SIT" ]
-
-             else
-                []
-            )
-                ++ (if row.tests.uat then
-                        [ dot "UAT" ]
-
-                    else
-                        []
-                   )
-                ++ (if row.tests.e2e then
-                        [ dot "E2E" ]
-
-                    else
-                        []
-                   )
-    in
-    if List.isEmpty chips then
-        Nothing
-
-    else
-        Just (div [ A.class "inline-flex items-center gap-1" ] chips)
-
-
-maybeWarnChip : FeatureRow -> Maybe (Html Msg)
-maybeWarnChip row =
-    case selectWarnKind row of
-        WarnNeedsDelivery ->
-            Just <|
-                span
-                    [ A.class "inline-flex items-center gap-1 px-1 py-0 rounded-md border border-amber-300 bg-amber-50 text-amber-800 text-[9px]" ]
-                    [ text "⚠ set delivery" ]
-
-        WarnStoriesNotDone ->
-            Just <|
-                span
-                    [ A.class "inline-flex items-center gap-1 px-1 py-0 rounded-md border border-rose-300 bg-rose-50 text-rose-800 text-[9px]" ]
-                    [ text "⚠ stories" ]
-
-        _ ->
-            Nothing
-
-
-
--- Compact header right-side extras (status first, then optional bits)
-
-
-compactRightExtras : FeatureRow -> Html Msg
-compactRightExtras row =
-    let
-        pieces : List (Html Msg)
-        pieces =
-            [ maybeTestStrip row
-            , maybeWarnChip row
-            ]
-                |> List.filterMap identity
-    in
-    div [ A.class "inline-flex items-center gap-2" ] (statusPill row :: pieces)
-
-
-featureRowViewDoneCompact : Model -> FeatureRow -> List (Html Msg)
+featureRowViewDoneCompact : Model -> Feature -> List (Html Msg)
 featureRowViewDoneCompact model row =
     let
-        featureCellCompact : FeatureRow -> Html Msg
+        featureCellCompact : Feature -> Html Msg
         featureCellCompact r =
             div
                 [ A.class "px-2 py-1 rounded-xl bg-emerald-50/50 border border-emerald-300 text-emerald-950 sticky left-0 z-10"
                 , A.style "backdrop-filter" "blur(2px)"
                 ]
-                [ featureHeader DoneCompact r [] ]
+                [ featureHeader ChevronLeft DoneCompact r [] ]
 
-        -- [ featureHeader DoneCompact r [ compactRightExtras r ] ]
         cells : List (Html Msg)
         cells =
             List.map (\ix -> compactSprintCell model row ix)
@@ -631,7 +592,7 @@ featureRowViewDoneCompact model row =
     featureCellCompact row :: cells
 
 
-compactSprintCell : Model -> FeatureRow -> Int -> Html Msg
+compactSprintCell : Model -> Feature -> Int -> Html Msg
 compactSprintCell model row ix =
     let
         toneCls =
@@ -640,49 +601,16 @@ compactSprintCell model row ix =
         baseCls =
             "px-2 py-1 rounded-lg border text-[12px] flex items-center justify-center" ++ toneCls
 
-        -- hasUnfinishedHere =
-        --     hasUnfinishedStoriesInSprint row ix
         isDeliveryHere =
-            row.delivery == Just ix
-
-        -- The delivery green dot; we emulate a “ring” by wrapping in a red bordered capsule when row has any unfinished.
-        -- deliveryView : Html Msg
-        -- deliveryView =
-        --     if row.status == Done && isDeliveryHere then
-        --         let
-        --             hasAnyUnfinished =
-        --                 hasUnfinishedStories row
-        --
-        --             wrapperCls =
-        --                 if hasAnyUnfinished then
-        --                     "inline-flex items-center justify-center rounded-full border border-rose-400 p-[1px]"
-        --
-        --                 else
-        --                     "inline-flex items-center justify-center"
-        --         in
-        --         span [ A.class wrapperCls, A.title "Feature delivered here" ]
-        --             [ span [ A.class "inline-block w-2.5 h-2.5 rounded-full bg-emerald-500" ] [] ]
-        --
-        --     else
-        --         text ""
-        -- unfinishedBadge : Html Msg
-        -- unfinishedBadge =
-        --     if hasUnfinishedHere then
-        --         span
-        --             [ A.class "inline-flex items-center justify-center w-4 h-4 rounded-full text-[10px] font-bold text-white bg-rose-500"
-        --             , A.title "Unfinished story in this sprint"
-        --             ]
-        --             [ text "!" ]
-        --
-        --     else
-        --         text ""
+            featureDeliverySprint row == Just ix
     in
     div [ A.class baseCls ]
         (if isDeliveryHere then
-            [ compactRightExtras row ]
-            -- [ deliveryView ]
-            -- else if hasUnfinishedHere then
-            --    [ unfinishedBadge ]
+            [ div [ A.class "inline-flex items-center gap-2" ]
+                [ statusPill Tiny row.status
+                , warnBadge Tiny (selectWarnKind row)
+                ]
+            ]
 
          else
             [ text "" ]
@@ -691,9 +619,10 @@ compactSprintCell model row ix =
 
 
 -- Normal view -----------------------------------
+-- FIX: Kanske borde vi fixa så vi endast har denna...och inte compact??
 
 
-featureRowView : Model -> FeatureRow -> List (Html Msg)
+featureRowView : Model -> Feature -> List (Html Msg)
 featureRowView model row =
     let
         mode =
@@ -737,18 +666,18 @@ featureRowView model row =
                 -- When delivery is Nothing, also show the feature card here (draggable only if can)
                 maybeFeatureCard : List (Html Msg)
                 maybeFeatureCard =
-                    case row.delivery of
-                        Nothing ->
-                            [ featureCard False warnKind can row ]
+                    case row.iteration of
+                        InPI _ ->
+                            []
 
                         _ ->
-                            []
+                            [ featureCard False warnKind can row ]
             in
             div
                 [ A.class baseCls
                 , A.style "backdrop-filter" "blur(2px)"
                 ]
-                (featureHeader mode row [] :: maybeFeatureCard ++ tray)
+                (featureHeader ChevronLeft mode row [] :: maybeFeatureCard ++ tray)
 
         cells : List (Html Msg)
         cells =
@@ -758,7 +687,7 @@ featureRowView model row =
     featureCell :: cells
 
 
-sprintCell : Model -> FeatureRow -> Int -> Html Msg
+sprintCell : Model -> Feature -> Int -> Html Msg
 sprintCell model row ix =
     let
         -- 0) Row mode & interactivity -------------------------------
@@ -786,26 +715,85 @@ sprintCell model row ix =
 
         isDeliveryHere : Bool
         isDeliveryHere =
-            row.delivery == Just ix
+            case row.iteration of
+                InPI k ->
+                    k == ix
 
-        -- 2) Visuals -------------------------------------------------
+                _ ->
+                    False
+
+        -- 2) Drag target validity (valid row)
+        validStoryTarget : Bool
+        validStoryTarget =
+            case model.draggingStory of
+                Nothing ->
+                    False
+
+                Just sid ->
+                    let
+                        belongsHere =
+                            List.any (\s -> s.id == sid) row.stories
+
+                        withinDeliveryGate =
+                            case row.iteration of
+                                InPI d ->
+                                    ix <= d
+
+                                _ ->
+                                    True
+                    in
+                    belongsHere && withinDeliveryGate
+
+        validDeliveryTarget : Bool
+        validDeliveryTarget =
+            case model.draggingDelivery of
+                Nothing ->
+                    False
+
+                Just fid ->
+                    -- Only this feature's delivery, and only at/after last story sprint
+                    if fid /= row.featureId then
+                        False
+
+                    else
+                        ix >= lastStorySprint row
+
+        -- 3) Hover state (valid sprint && valid row)
+        hoveredForStory : Bool
+        hoveredForStory =
+            model.hoverStorySprint == Just ix && validStoryTarget
+
+        hoveredForDelivery : Bool
+        hoveredForDelivery =
+            model.hoverDeliverySprint == Just ix && validDeliveryTarget
+
+        -- 4) Visuals -------------------------------------------------
+        toneCls : String
         toneCls =
             rowTintClass model row
 
+        -- subtle base, plus “valid target” and “hovered” accents
         baseClass : String
         baseClass =
             "min-w-0 px-3 py-2 rounded-xl border min-h-[84px] flex flex-col gap-1 transition " ++ toneCls
 
-        -- colorClass : String
-        -- colorClass =
-        --     "bg-white border-slate-200 "
-        emptyHint : List (Html Msg)
-        emptyHint =
-            if List.isEmpty storiesHere && not isDeliveryHere then
-                [ div [ A.class "text-[11px] text-slate-400 italic" ] [ text "–" ] ]
+        validCls : String
+        validCls =
+            if can && (validStoryTarget || validDeliveryTarget) then
+                -- light border change + dashed hint = “this cell can accept drop”
+                " border-indigo-300 border-dashed "
 
             else
-                []
+                " border-slate-200 "
+
+        hoverCls : String
+        hoverCls =
+            if can && (hoveredForStory || hoveredForDelivery) then
+                -- on actual hover, make it obviously active
+                " ring-2 ring-indigo-400 bg-indigo-50/40 "
+
+            else
+                ""
 
         forbidClass : String
         forbidClass =
@@ -815,42 +803,10 @@ sprintCell model row ix =
             else
                 " cursor-not-allowed"
 
-        -- keep/extend your own “forbidden” styling if needed
-        -- 3) Warn kind (after/delivery/stories-not-done) -------------
-        warnKind : FeatureWarn
-        warnKind =
-            selectWarnKind row
-
-        -- 4) Cell-level validity (active rows only) ------------------
-        -- Story valid target: dragging a story that belongs to THIS row
-        isValidTargetStory : Bool
-        isValidTargetStory =
-            case model.draggingStory of
-                Nothing ->
-                    False
-
-                Just sid ->
-                    row.stories
-                        |> List.any (\s -> s.id == sid)
-
-        -- Delivery valid target: dragging this row’s feature AND ix >= last story sprint
-        isValidTargetDelivery : Bool
-        isValidTargetDelivery =
-            case model.draggingDelivery of
-                Nothing ->
-                    False
-
-                Just fid ->
-                    if fid /= row.featureId then
-                        False
-
-                    else
-                        ix >= lastStorySprint row
-
-        -- 5) Handlers (built from validity; attached by the ROW gate) -
+        -- 5) Handlers (built from validity; attached by the ROW gate)
         storyHandlers : List (Html.Attribute Msg)
         storyHandlers =
-            if isValidTargetStory then
+            if validStoryTarget then
                 [ Html.Events.on "dragenter" (Json.Decode.succeed (HoverStory (Just ix)))
                 , Html.Events.preventDefaultOn "dragover" (Json.Decode.succeed ( HoverStory (Just ix), True ))
                 , Html.Events.on "dragleave" (Json.Decode.succeed (HoverStory Nothing))
@@ -862,7 +818,7 @@ sprintCell model row ix =
 
         deliveryHandlers : List (Html.Attribute Msg)
         deliveryHandlers =
-            if isValidTargetDelivery then
+            if validDeliveryTarget then
                 [ Html.Events.on "dragenter" (Json.Decode.succeed (HoverDelivery (Just ix)))
                 , Html.Events.preventDefaultOn "dragover" (Json.Decode.succeed ( HoverDelivery (Just ix), True ))
                 , Html.Events.on "dragleave" (Json.Decode.succeed (HoverDelivery Nothing))
@@ -872,24 +828,51 @@ sprintCell model row ix =
             else
                 []
 
-        -- 6) Ghosting (keep your logic; placeholders here) -----------
+        -- 6) Ghosting ------------------------------------------------
+        -- Ghost the original story chip when that specific story is being dragged
         isGhostStory : Story -> Bool
-        isGhostStory _ =
-            False
+        isGhostStory s =
+            case model.draggingStory of
+                Just sid ->
+                    sid
+                        == s.id
+                        && (case s.iteration of
+                                InPI k ->
+                                    k == ix
 
+                                _ ->
+                                    False
+                           )
+
+                Nothing ->
+                    False
+
+        -- Ghost the original feature delivery card in its original cell
         isGhostDelivery : Bool
         isGhostDelivery =
-            False
+            case ( model.draggingDelivery, row.iteration ) of
+                ( Just fid, InPI k ) ->
+                    fid == row.featureId && k == ix
+
+                _ ->
+                    False
+
+        -- 7) Content helpers -----------------------------------------
+        emptyHint : List (Html Msg)
+        emptyHint =
+            if List.isEmpty storiesHere && not isDeliveryHere then
+                [ div [ A.class "text-[11px] text-slate-400 italic" ] [ text "–" ] ]
+
+            else
+                []
     in
     div
-        (A.class
-            (baseClass ++ forbidClass)
-            -- 👉 Row-level gate: attaches ALL handlers only when row is interactive
+        (A.class (baseClass ++ validCls ++ hoverCls ++ forbidClass)
             :: attrsIf can (storyHandlers ++ deliveryHandlers)
         )
         (List.map (\s -> storyCard (isGhostStory s) can s) storiesHere
             ++ (if isDeliveryHere then
-                    [ featureCard isGhostDelivery warnKind can row ]
+                    [ featureCard isGhostDelivery (selectWarnKind row) can row ]
 
                 else
                     []
@@ -901,50 +884,12 @@ sprintCell model row ix =
 storyCard : Bool -> Bool -> Story -> Html Msg
 storyCard isGhost can s =
     let
-        ( bg, fg ) =
-            case s.status of
-                Todo ->
-                    ( "bg-slate-100 border-slate-200", "text-slate-700" )
-
-                Doing ->
-                    ( "bg-sky-100 border-sky-200", "text-sky-900" )
-
-                Done ->
-                    ( "bg-emerald-100 border-emerald-200", "text-emerald-900" )
-
         ghostClass =
             if isGhost then
                 " opacity-30 saturate-50"
 
             else
                 ""
-
-        badgeView : Html Msg
-        badgeView =
-            case s.iteration of
-                Missing ->
-                    span
-                        [ A.class "inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-amber-300 bg-amber-50 text-amber-800 text-[11px] shrink-0"
-                        , A.title "Story has no sprint set"
-                        ]
-                        [ text "⚠︎ no sprint" ]
-
-                WholePI ->
-                    span
-                        [ A.class "inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-amber-300 bg-amber-50 text-amber-800 text-[11px] shrink-0"
-                        , A.title "Story is set to whole PI"
-                        ]
-                        [ text "⚠︎ whole PI" ]
-
-                OutsidePI ->
-                    span
-                        [ A.class "inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-rose-300 bg-rose-50 text-rose-800 text-[11px] shrink-0"
-                        , A.title "Story belongs to another PI"
-                        ]
-                        [ text "⚠︎ wrong PI" ]
-
-                InPI _ ->
-                    text ""
 
         dragAttrs : List (Html.Attribute Msg)
         dragAttrs =
@@ -967,7 +912,12 @@ storyCard isGhost can s =
                 " opacity-60 cursor-not-allowed"
     in
     div
-        ([ A.class ("min-w-0 flex items-center justify-between gap-2 pl-1 pr-2 py-1 rounded-lg border select-none " ++ bg ++ " " ++ fg ++ ghostClass ++ disabledCls)
+        ([ A.class
+            ("min-w-0 flex items-center justify-between gap-2 pl-1 pr-2 py-1 rounded-lg border select-none "
+                ++ cardToneForStatus s.status
+                ++ ghostClass
+                ++ disabledCls
+            )
          , A.title s.title
          ]
             ++ dragAttrs
@@ -983,11 +933,11 @@ storyCard isGhost can s =
                 [ span [ A.class "font-medium truncate text-[13px]" ] [ text s.title ] ]
             )
         , -- RIGHT: warning badge (if any)
-          div [ A.class "flex items-center shrink-0" ] [ badgeView ]
+          div [ A.class "flex items-center shrink-0" ] [ storyIterationBadge Tiny s.iteration ]
         ]
 
 
-featureCard : Bool -> FeatureWarn -> Bool -> FeatureRow -> Html Msg
+featureCard : Bool -> FeatureWarn -> Bool -> Feature -> Html Msg
 featureCard isGhost warnKind can row =
     let
         -- visuals
@@ -998,47 +948,19 @@ featureCard isGhost warnKind can row =
             else
                 ""
 
-        borderColor =
-            case warnKind of
-                WarnAfter ->
-                    " border-amber-400"
-
-                WarnNeedsDelivery ->
-                    " border-amber-400"
-
-                WarnStoriesNotDone ->
-                    " border-amber-400"
-
-                NoWarn ->
-                    " border-indigo-300"
-
-        warnBadgeView : Html Msg
-        warnBadgeView =
-            case warnKind of
-                WarnAfter ->
-                    span
-                        [ A.class "inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md border border-amber-300 bg-amber-50 text-amber-800 text-[10px] shrink-0"
-                        , A.title "One or more stories are scheduled after delivery"
-                        ]
-                        [ text "⚠︎ after" ]
-
-                WarnNeedsDelivery ->
-                    span
-                        [ A.class "inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md border border-amber-300 bg-amber-50 text-amber-800 text-[10px] shrink-0"
-                        , A.title "Feature has no delivery sprint set"
-                        ]
-                        [ text "⚠︎ set delivery" ]
-
-                WarnStoriesNotDone ->
-                    span
-                        [ A.class "inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md border border-amber-300 bg-amber-50 text-amber-800 text-[10px] shrink-0"
-                        , A.title "Feature is Done but some stories are not closed"
-                        ]
-                        [ text "⚠︎ stories" ]
-
-                NoWarn ->
-                    text ""
-
+        -- borderColor =
+        --     case warnKind of
+        --         WarnAfter ->
+        --             " border-amber-400"
+        --
+        --         WarnNeedsDelivery ->
+        --             " border-amber-400"
+        --
+        --         WarnStoriesNotDone ->
+        --             " border-amber-400"
+        --
+        --         NoWarn ->
+        --             " border-indigo-300"
         dragAttrs : List (Html.Attribute Msg)
         dragAttrs =
             if can then
@@ -1068,8 +990,9 @@ featureCard isGhost warnKind can row =
     in
     div
         (A.class
-            ("mt-1 rounded-xl border bg-indigo-50/70 text-indigo-900 select-none overflow-hidden "
-                ++ borderColor
+            ("mt-1 rounded-xl border select-none overflow-hidden "
+                ++ cardToneForStatus row.status
+                -- ++ borderColor
                 ++ ghostClass
                 ++ disabledCardClass
             )
@@ -1090,59 +1013,35 @@ featureCard isGhost warnKind can row =
                   div [ A.class "flex items-center justify-between gap-2 min-w-0" ]
                     [ span [ A.class "text-[13px] font-semibold truncate" ] [ text row.title ]
                     , div [ A.class "flex items-center gap-1 shrink-0" ]
-                        [ warnBadgeView ]
+                        [ warnBadge Tiny warnKind ]
                     ]
                 , -- row 2: delivery + test chips
                   div [ A.class "mt-1 flex items-center justify-between gap-2 min-w-0" ]
-                    [ statusPill row -- span [ A.class "text-[12px] text-indigo-900/80 font-medium" ] [ text "Delivery" ]
-                    , div [ A.class ("flex items-center gap-1 shrink-0" ++ chipsWrapperClass) ]
-                        (testChip can row.featureId SIT row.tests.sit
-                            ++ testChip can row.featureId UAT row.tests.uat
-                            ++ testChip can row.featureId E2E row.tests.e2e
-                        )
+                    [ -- statusPill Tiny row.status
+                      testStrip can row.featureId row.tests
                     ]
                 ]
             ]
         ]
 
 
-testChip : Bool -> Int -> TestKind -> Bool -> List (Html Msg)
-testChip can featureId testKind isActive =
+testStrip : Bool -> Int -> Tests -> Html Msg
+testStrip can featureId tests =
     let
-        label =
-            case testKind of
-                SIT ->
-                    "SIT"
+        mk label active kind =
+            testChipView Small
+                { label = label, active = active }
+                (if can then
+                    [ Html.Events.onClick (ToggleTest featureId kind) ]
 
-                UAT ->
-                    "UAT"
+                 else
+                    []
+                )
 
-                E2E ->
-                    "E2E"
-
-        activeBase =
-            "bg-indigo-100 border-indigo-300 text-indigo-700 font-semibold"
-
-        activeHover =
-            "hover:bg-indigo-200 hover:border-indigo-400"
-
-        inactiveBase =
-            "bg-white border-slate-200 text-slate-400"
-
-        inactiveHover =
-            "hover:bg-indigo-50 hover:border-indigo-200 hover:text-indigo-600"
-
-        cls =
-            if isActive then
-                activeBase ++ " " ++ activeHover
-
-            else
-                inactiveBase ++ " " ++ inactiveHover
+        chips =
+            [ mk "SIT" tests.sit SIT
+            , mk "UAT" tests.uat UAT
+            , mk "E2E" tests.e2e E2E
+            ]
     in
-    [ span
-        (A.class ("inline-flex items-center justify-center px-[3px] py-0 rounded-full border text-[8px] cursor-pointer select-none transition " ++ cls)
-            :: attrsIf can
-                [ Html.Events.onClick (ToggleTest featureId testKind) ]
-        )
-        [ text label ]
-    ]
+    testStripView Tiny chips

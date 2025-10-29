@@ -36,8 +36,8 @@ buildPi root sprintNames =
 -- Resolve a story/feature iterationPath into UI’s StoryIteration
 
 
-resolveIteration : PiContext -> String -> StoryIteration
-resolveIteration ctx path =
+toIteration : PiContext -> String -> Iteration
+toIteration ctx path =
     if String.trim path == "" then
         Missing
 
@@ -67,21 +67,11 @@ testsFromTags tags =
     { sit = has "SIT", uat = has "UAT", e2e = has "E2E" }
 
 
-deliveryFromPath : PiContext -> String -> Maybe Int
-deliveryFromPath ctx path =
-    case resolveIteration ctx path of
-        InPI ix ->
-            Just ix
-
-        _ ->
-            Nothing
-
-
 
 -- Main translator: ADO sample → List FeatureRow
 
 
-translate : PiContext -> Ado.Sample -> List FeatureRow
+translate : PiContext -> Ado.Sample -> List Feature
 translate ctx sample =
     let
         storiesByFeature : Int -> List Ado.AdoStory
@@ -92,16 +82,16 @@ translate ctx sample =
         toStory s =
             { id = s.id
             , title = s.title
-            , iteration = resolveIteration ctx s.iterationPath
+            , iteration = toIteration ctx s.iterationPath
             , status = Ado.stateToStatus s.state
             }
 
-        toRow : Ado.AdoFeature -> FeatureRow
+        toRow : Ado.AdoFeature -> Feature
         toRow f =
             { featureId = f.id
             , title = f.title
-            , delivery = deliveryFromPath ctx f.iterationPath
-            , status = Ado.stateToStatus f.state -- ⬅️ NEW
+            , iteration = toIteration ctx f.iterationPath
+            , status = Ado.stateToStatus f.state
             , closedDate = Nothing
             , tests = testsFromTags f.tags
             , stories = storiesByFeature f.id |> List.map toStory

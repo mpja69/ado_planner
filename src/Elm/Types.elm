@@ -13,7 +13,7 @@ type Status
     | Done
 
 
-type StoryIteration
+type Iteration
     = InPI Int -- sprint index 1..N within the chosen PI
     | Missing -- no iteration assigned
     | WholePI -- iteration path is the PI root (no sprint)
@@ -23,7 +23,7 @@ type StoryIteration
 type alias Story =
     { id : Int
     , title : String
-    , iteration : StoryIteration
+    , iteration : Iteration
     , status : Status
     }
 
@@ -46,15 +46,23 @@ type TestKind
 
 
 type RowMode
-    = Active
+    = Open
     | DoneCompact
     | DoneExpanded
 
 
-type alias FeatureRow =
+type FeatureWarn
+    = NoWarn
+    | WarnAfter -- A feature has stories AFTER it self, (with regards to IterationPath)
+    | WarnNeedsDelivery -- A feature has no sprint set. (IterationPath is missing or unsufficient)
+    | WarnStoriesNotDone -- Some of the feature's stories are not done, (while the feture is)
+    | WarnFeatureLagging
+
+
+type alias Feature =
     { featureId : Int
     , title : String
-    , delivery : Maybe Int -- 1..N if feature iteration is a sprint; Nothing for WholePI/Missing/Outside
+    , iteration : Iteration --Maybe Int -- 1..N if feature iteration is a sprint; Nothing for WholePI/Missing/Outside
     , status : Status
     , closedDate : Maybe Posix -- NEW: ADO ClosedDate (if available)
     , tests : Tests -- mapped from tags later
@@ -66,19 +74,3 @@ type AdoCmd
     = SetStoryIteration { storyId : Int, toSprintIx : Int }
     | SetFeatureIteration { featureId : Int, toSprintIx : Int }
     | SetFeatureTags { featureId : Int, sit : Bool, uat : Bool, e2e : Bool }
-
-
-
--- NEW
--- type FeatureWarn
---     = NoWarn
---     | WarnNeedsDelivery
---     | WarnAfter
---     | WarnStoriesRemain
-
-
-type FeatureWarn
-    = NoWarn
-    | WarnAfter
-    | WarnNeedsDelivery
-    | WarnStoriesNotDone

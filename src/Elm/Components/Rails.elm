@@ -4,11 +4,13 @@ import Html exposing (Html, div)
 import Html.Attributes as A
 import Svg exposing (Svg, svg)
 import Svg.Attributes as SA
+import Ui exposing (UiSize(..))
 
 
-type RailSize
-    = Small
-    | Medium
+
+-- type RailSize
+--     = Small
+--     | Medium
 
 
 type PatternMode
@@ -33,9 +35,25 @@ type alias RailSpecPx =
     }
 
 
-railSpec : RailSize -> PatternMode -> RailSpecPx
+railSpec : UiSize -> PatternMode -> RailSpecPx
 railSpec size mode =
     case size of
+        Tiny ->
+            { widthPx = 15
+            , heightPx = 20
+            , padLeftPx = 2
+            , padTopPx = 7
+            , cols = 2
+            , rows = 2
+            , dotDiameterPx = 2
+            , gapXPx = 4
+            , gapYPx = 2
+            , dotColor = "rgba(99,102,241,0.50)"
+            , bgColor = "transparent"
+            , rounded = True
+            , mode = mode
+            }
+
         Small ->
             { widthPx = 15
             , heightPx = 20
