@@ -3,10 +3,9 @@ module Data.Ado exposing
     , AdoStory
     , Sample
     , sample
-    , stateToStatus
     )
 
-import Types exposing (Status(..))
+import Status exposing (Status(..))
 
 
 
@@ -37,49 +36,18 @@ type alias Sample =
     }
 
 
-
--- Crude but practical map; adjust to your process later.
-
-
-stateToStatus : String -> Status
-stateToStatus s =
-    case String.toLower s of
-        "closed" ->
-            Done
-
-        "done" ->
-            Done
-
-        "resolved" ->
-            Done
-
-        "active" ->
-            Doing
-
-        "in progress" ->
-            Doing
-
-        -- everything else (New, Proposed, Ready, etc.)
-        _ ->
-            Todo
-
-
-
--- ⬇️ Sample updated with feature `state`
-
-
 sample : Sample
 sample =
     { features =
         [ { id = 11
           , title = "Feature A"
           , iterationPath = "Contoso\\ART\\PI-2025-1\\Sprint 2"
-          , state = "Active"
+          , state = "New"
           , tags = [ "SIT", "E2E" ]
           }
         , { id = 22
           , title = "Feature B"
-          , iterationPath = "Contoso\\ART\\PI-2025-1\\Sprint 4"
+          , iterationPath = "" --"Contoso\\ART\\PI-2025-1\\Sprint 4"
           , state = "Active"
           , tags = [ "UAT" ]
           }
@@ -91,19 +59,25 @@ sample =
           }
         , { id = 44
           , title = "Feature D"
-          , iterationPath = "Contoso\\ART\\PI-2025-1\\Sprint 3" -- WholePI
+          , iterationPath = "Contoso\\ART\\PI-2025-1"
           , state = "Closed"
           , tags = [ "SIT" ]
           }
         , { id = 55
           , title = "Feature E"
-          , iterationPath = "Contoso\\ART\\PI-2025-1\\Sprint 3" -- WholePI
+          , iterationPath = "Contoso\\ART\\PI-2025-1\\Sprint 3"
           , state = "Closed"
+          , tags = [ "UAT", "E2E" ]
+          }
+        , { id = 66
+          , title = "Feature F"
+          , iterationPath = "Contoso\\ART\\PI-2025-1\\Sprint 3"
+          , state = "Resolved"
           , tags = [ "UAT", "E2E" ]
           }
         ]
     , stories =
-        [ { id = 101, title = "Login API", parentId = 11, iterationPath = "Contoso\\ART\\PI-2025-1\\Sprint 1", state = "Active" }
+        [ { id = 101, title = "Login API", parentId = 11, iterationPath = "Contoso\\ART\\PI-2025-1\\Sprint 1", state = "Resolved" }
         , { id = 102, title = "Login UI", parentId = 11, iterationPath = "Contoso\\ART\\PI-2025-1\\Sprint 2", state = "New" }
         , { id = 103, title = "OAuth callback", parentId = 11, iterationPath = "Contoso\\ART\\PI-2025-1\\Sprint 3", state = "Closed" }
         , { id = 201, title = "Search backend", parentId = 22, iterationPath = "Contoso\\ART\\PI-2025-1\\Sprint 1", state = "Closed" }
@@ -111,8 +85,10 @@ sample =
         , { id = 203, title = "Search UI", parentId = 22, iterationPath = "Contoso\\ART\\PI-2025-1", state = "Active" } -- WholePI
         , { id = 204, title = "Metrics probe", parentId = 22, iterationPath = "Contoso\\ART\\PI-2024-4\\Sprint 2", state = "New" } -- OutsidePI
         , { id = 301, title = "Report engine", parentId = 33, iterationPath = "Contoso\\ART\\PI-2025-1\\Sprint 2", state = "Active" }
-        , { id = 302, title = "Export CSV", parentId = 33, iterationPath = "Contoso\\ART\\PI-2025-1\\Sprint 4", state = "New" }
+        , { id = 302, title = "Export CSV", parentId = 33, iterationPath = "Contoso\\ART\\PI-2025-1\\Sprint 4", state = "Resolved" }
         , { id = 401, title = "Export json", parentId = 44, iterationPath = "Contoso\\ART\\PI-2025-1\\Sprint 2", state = "New" }
+        , { id = 402, title = "Export markdown", parentId = 44, iterationPath = "Contoso\\ART\\PI-2025-1\\Sprint 3", state = "Closed" }
         , { id = 501, title = "Export excel", parentId = 55, iterationPath = "Contoso\\ART\\PI-2025-1\\Sprint 2", state = "Closed" }
+        , { id = 601, title = "Export text", parentId = 66, iterationPath = "Contoso\\ART\\PI-2025-1\\Sprint 2", state = "New" }
         ]
     }

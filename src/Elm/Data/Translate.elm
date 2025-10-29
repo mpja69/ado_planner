@@ -5,6 +5,7 @@ module Data.Translate exposing
     )
 
 import Data.Ado as Ado
+import Status exposing (statusFromADO)
 import Types exposing (..)
 
 
@@ -83,7 +84,7 @@ translate ctx sample =
             { id = s.id
             , title = s.title
             , iteration = toIteration ctx s.iterationPath
-            , status = Ado.stateToStatus s.state
+            , status = statusFromADO s.state
             }
 
         toRow : Ado.AdoFeature -> Feature
@@ -91,7 +92,7 @@ translate ctx sample =
             { featureId = f.id
             , title = f.title
             , iteration = toIteration ctx f.iterationPath
-            , status = Ado.stateToStatus f.state
+            , status = statusFromADO f.state
             , closedDate = Nothing
             , tests = testsFromTags f.tags
             , stories = storiesByFeature f.id |> List.map toStory
