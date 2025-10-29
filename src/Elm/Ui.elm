@@ -4,17 +4,18 @@ module Ui exposing
     , cardToneForStatus
     , statusPill
     , statusToneClasses
-    , storyIterationBadge
     , testChipView
     , testStripView
     , uiToneClasses
     , warnBadge
+    , warnIterationBadge
     , warnToneClasses
     )
 
 import Html exposing (Html, div, span, text)
 import Html.Attributes as A
-import Types exposing (FeatureWarn(..), Iteration(..), Status(..), Tests)
+import Status exposing (Status(..), statusLabel)
+import Types exposing (FeatureWarn(..), Iteration(..))
 
 
 
@@ -73,22 +74,24 @@ uiToneClasses color =
 statusToneClasses : Status -> String
 statusToneClasses st =
     case st of
-        Todo ->
+        New ->
             uiToneClasses Slate
 
-        Doing ->
+        Active ->
             uiToneClasses Sky
 
-        Done ->
+        Resolved ->
+            uiToneClasses Indigo
+
+        Closed ->
             uiToneClasses Emerald
 
 
 warnToneClasses : FeatureWarn -> String
 warnToneClasses w =
     case w of
-        WarnNeedsDelivery ->
-            uiToneClasses Amber
-
+        -- WarnNeedsDelivery ->
+        --     uiToneClasses Amber
         WarnAfter ->
             uiToneClasses Amber
 
@@ -157,15 +160,7 @@ statusPill sz st =
             statusToneClasses st
 
         label =
-            case st of
-                Todo ->
-                    "Todo"
-
-                Doing ->
-                    "Doing"
-
-                Done ->
-                    "Done"
+            statusLabel st
     in
     span
         [ A.class ("inline-flex items-center rounded-md border " ++ badgeSizeClasses sz ++ " " ++ tone)
@@ -191,14 +186,11 @@ warnBadge sz kind =
 
                 label =
                     case kind of
-                        WarnNeedsDelivery ->
-                            "⚠ set delivery"
-
                         WarnAfter ->
-                            "⚠ after"
+                            "⚠ move after"
 
                         WarnStoriesNotDone ->
-                            "⚠ stories"
+                            "⚠ close stories"
 
                         WarnFeatureLagging ->
                             "⚠ start feature"
@@ -281,22 +273,24 @@ iterationLabel iter =
         InPI _ ->
             Nothing
 
-        Missing ->
-            Just "⚠ no sprint"
-
-        WholePI ->
-            Just "⚠ whole PI"
-
-        OutsidePI ->
-            Just "⚠ wrong PI"
+        -- Missing ->
+        --     Just "⚠ no sprint"
+        --
+        -- WholePI ->
+        --     Just "⚠ whole PI"
+        --
+        -- OutsidePI ->
+        --     Just "⚠ wrong PI"
+        _ ->
+            Just "⚠ set sprint"
 
 
 
 -- Badge för storyns iteration-varning (NoWarn-fall ger tom span)
 
 
-storyIterationBadge : UiSize -> Iteration -> Html msg
-storyIterationBadge sz iter =
+warnIterationBadge : UiSize -> Iteration -> Html msg
+warnIterationBadge sz iter =
     case ( iterationToneColor iter, iterationLabel iter ) of
         ( Nothing, _ ) ->
             span [] []

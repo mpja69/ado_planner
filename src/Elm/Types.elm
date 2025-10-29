@@ -1,16 +1,11 @@
 module Types exposing (..)
 
+import Status exposing (Status)
 import Time exposing (Posix)
 
 
 
 -- UI/Domain types used by the app
-
-
-type Status
-    = Todo
-    | Doing
-    | Done
 
 
 type Iteration
@@ -41,22 +36,11 @@ type TestKind
     | E2E
 
 
-
--- ROW MODE (derived from feature status + unlocks)
-
-
-type RowMode
-    = Open
-    | DoneCompact
-    | DoneExpanded
-
-
 type FeatureWarn
     = NoWarn
     | WarnAfter -- A feature has stories AFTER it self, (with regards to IterationPath)
-    | WarnNeedsDelivery -- A feature has no sprint set. (IterationPath is missing or unsufficient)
     | WarnStoriesNotDone -- Some of the feature's stories are not done, (while the feture is)
-    | WarnFeatureLagging
+    | WarnFeatureLagging -- Some of the feature's stories have started, but the feature has not
 
 
 type alias Feature =
