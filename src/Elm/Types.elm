@@ -38,9 +38,9 @@ type TestKind
 
 type FeatureWarn
     = NoWarn
-    | WarnStoryAfter -- A feature has stories AFTER it self, (with regards to IterationPath)
-    | WarnStoryOpen -- Some of the feature's stories are not done, (while the feture is)
-    | WarnStoryStarted -- Some of the feature's stories have started, but the feature has not
+    | WarnStoryAfter -- A feature has stories planned after it self
+    | WarnStoryOpen -- A "closed feature" has stories that are still open (i.e. not closed)
+    | WarnStoryStarted -- A "new feature" has stories that have started
 
 
 type alias Feature =

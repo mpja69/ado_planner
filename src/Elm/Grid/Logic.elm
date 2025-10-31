@@ -47,18 +47,13 @@ lastStorySprint row =
 selectWarnKind : Feature -> FeatureWarn
 selectWarnKind row =
     if Status.isClosed row.status then
-        -- if List.any (\s -> Status.isOpen s.status) row.stories then
         if hasAnyStoryOpen row then
             WarnStoryOpen
 
         else
             NoWarn
 
-    else
-    -- NEW: Feature kvar i Todo men någon story är > Todo
-    if
-        Status.isNew row.status && hasAnyStoryStarted row
-    then
+    else if Status.isNew row.status && hasAnyStoryStarted row then
         WarnStoryStarted
 
     else
@@ -66,7 +61,6 @@ selectWarnKind row =
             Nothing ->
                 NoWarn
 
-            --WarnNeedsDelivery
             Just _ ->
                 if hasStoryAfterDelivery row then
                     WarnStoryAfter
