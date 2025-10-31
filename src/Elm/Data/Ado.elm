@@ -42,7 +42,7 @@ sample =
         [ { id = 11
           , title = "Feature A"
           , iterationPath = "Contoso\\ART\\PI-2025-1\\Sprint 2"
-          , state = "New"
+          , state = "Active"
           , tags = [ "SIT", "E2E" ]
           }
         , { id = 22
@@ -59,7 +59,7 @@ sample =
           }
         , { id = 44
           , title = "Feature D"
-          , iterationPath = "Contoso\\ART\\PI-2025-1"
+          , iterationPath = "Contoso\\ART\\PI-2025-1\\Sprint 1"
           , state = "Closed"
           , tags = [ "SIT" ]
           }
