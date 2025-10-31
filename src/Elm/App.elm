@@ -4,14 +4,14 @@ import Browser
 import Components.Rails exposing (..)
 import Data.Ado as Ado
 import Data.Translate as T
+import Grid.Logic as GL
 import Html exposing (Html, div, span, text)
 import Html.Attributes as A
 import Html.Events
 import Json.Decode
-import Set exposing (Set)
-import Status exposing (isClosed, isNew, isOpen, isStarted)
+import Status exposing (..)
 import Types exposing (..)
-import Ui exposing (UiSize(..), cardToneForStatus, statusPill, testChipView, testStripView, warnBadge, warnIterationBadge)
+import Ui exposing (UiSize(..), cardToneForStatus, statusPill, testChipView, testStripView, warnBadge)
 
 
 
@@ -26,9 +26,6 @@ import Ui exposing (UiSize(..), cardToneForStatus, statusPill, testChipView, tes
 -- Add checking for AreaPath
 --    Are the stories in the right place?
 -- type alias UiFlags =
---     { compactDoneRows : Bool
---     , tintDoneRows : Bool
---     }
 
 
 type alias Model =
@@ -178,7 +175,7 @@ update msg model =
         ToggleTest featureId kind ->
             let
                 newRows =
-                    List.map (toggleTest featureId kind) model.rows
+                    List.map (GL.toggleTest featureId kind) model.rows
 
                 updated =
                     List.filter (\r -> r.featureId == featureId) newRows
@@ -203,103 +200,6 @@ update msg model =
 
 
 -- HELPERS
-
-
-toggleTest : Int -> TestKind -> Feature -> Feature
-toggleTest fid kind row =
-    if row.featureId /= fid then
-        row
-
-    else
-        let
-            t =
-                row.tests
-
-            new =
-                case kind of
-                    SIT ->
-                        { t | sit = not t.sit }
-
-                    UAT ->
-                        { t | uat = not t.uat }
-
-                    E2E ->
-                        { t | e2e = not t.e2e }
-        in
-        { row | tests = new }
-
-
-lastStorySprint : Feature -> Int
-lastStorySprint row =
-    row.stories
-        |> List.filterMap
-            (\s ->
-                case s.iteration of
-                    InPI ix ->
-                        Just ix
-
-                    _ ->
-                        Nothing
-            )
-        |> List.maximum
-        |> Maybe.withDefault 1
-
-
-selectWarnKind : Feature -> FeatureWarn
-selectWarnKind row =
-    if isClosed row.status then
-        if List.any (\s -> isOpen s.status) row.stories then
-            WarnStoriesNotDone
-
-        else
-            NoWarn
-
-    else
-    -- NEW: Feature kvar i Todo men någon story är > Todo
-    if
-        isNew row.status && hasStoryStarted row
-    then
-        WarnFeatureLagging
-
-    else
-        case featureDeliverySprint row of
-            Nothing ->
-                NoWarn
-
-            --WarnNeedsDelivery
-            Just _ ->
-                if hasStoryAfterDelivery row then
-                    WarnAfter
-
-                else
-                    NoWarn
-
-
-unscheduledStories : Feature -> List Story
-unscheduledStories row =
-    row.stories
-        |> List.filter
-            (\s ->
-                case s.iteration of
-                    InPI _ ->
-                        False
-
-                    -- show Missing / WholePI / OutsidePI
-                    _ ->
-                        True
-            )
-
-
-
--- Centralized interaction rule
-
-
-canInteract : Feature -> Bool
-canInteract f =
-    isOpen f.status
-
-
-
 -- Only include attributes when `cond` is true
 
 
@@ -313,66 +213,6 @@ attrsIf cond attrs =
 
 
 
--- NEW: extract sprint index from an Iteration -------------------
-
-
-iterationToSprint : Iteration -> Maybe Int
-iterationToSprint itn =
-    case itn of
-        InPI ix ->
-            Just ix
-
-        _ ->
-            Nothing
-
-
-
--- NEW: feature's delivery sprint (if set)
-
-
-featureDeliverySprint : Feature -> Maybe Int
-featureDeliverySprint f =
-    iterationToSprint f.iteration
-
-
-hasStoryAfterDelivery : Feature -> Bool
-hasStoryAfterDelivery row =
-    case featureDeliverySprint row of
-        Nothing ->
-            False
-
-        Just d ->
-            row.stories
-                |> List.any
-                    (\s ->
-                        case s.iteration of
-                            InPI ix ->
-                                ix > d
-
-                            _ ->
-                                False
-                    )
-
-
-hasStoryStarted : Feature -> Bool
-hasStoryStarted row =
-    List.any (\s -> isStarted s.status) row.stories
-
-
-
--- ----------------------------------------------------------------
--- Stub: fill in using your PI boundaries/cadence later
--- closedSprintIx : Model -> FeatureRow -> Maybe Int
--- closedSprintIx model row =
---     case row.closedDate of
---         Nothing ->
---             Nothing
---
---         Just posix ->
---             dateToSprint model posix
--- dateToSprint : Model -> Posix -> Maybe Int
--- dateToSprint _ _ =
---     Nothing
 -- VIEW
 
 
@@ -393,27 +233,46 @@ view model =
 gridView : Model -> Html Msg
 gridView model =
     let
+        unscheduled =
+            GL.hasUnscheduledItems model.rows
+
+        leftColWidth =
+            if unscheduled then
+                "220px"
+
+            else
+                "12px"
+
         templateCols =
-            "220px repeat(" ++ String.fromInt model.sprintCount ++ ", minmax(0, 1fr))"
+            leftColWidth ++ " repeat(" ++ String.fromInt model.sprintCount ++ ", minmax(0, 1fr))"
     in
     div
         [ A.style "display" "grid"
         , A.style "grid-template-columns" templateCols
         , A.class "gap-2"
         ]
-        (headerRow model.sprintCount
+        (headerRow unscheduled model.sprintCount
             :: List.concatMap (featureRowView model) model.rows
         )
 
 
-headerRow : Int -> Html Msg
-headerRow n =
+headerRow : Bool -> Int -> Html Msg
+headerRow unscheduled n =
     let
         headCell s =
             div [ A.class "text-xs font-semibold uppercase tracking-wide text-slate-600 px-2 py-1" ] [ text s ]
+
+        mutedCell =
+            -- empty/transparent cell so the grid stays aligned
+            div [ A.class "px-0 py-0" ] []
     in
     div [ A.class "contents" ]
-        (headCell "Feature"
+        ((if unscheduled then
+            headCell "Unscheduled"
+
+          else
+            mutedCell
+         )
             :: List.map (\i -> headCell ("Sprint " ++ String.fromInt i)) (List.range 1 n)
         )
 
@@ -426,16 +285,29 @@ featureRowView : Model -> Feature -> List (Html Msg)
 featureRowView model row =
     let
         can =
-            canInteract row
+            GL.canInteract row
 
         --mode
         warnKind : FeatureWarn
         warnKind =
-            selectWarnKind row
+            GL.selectWarnKind row
+
+        isUnscheduledFeature =
+            GL.isUnscheduled row.iteration
+
+        isUnscheduledStories =
+            not (List.isEmpty (GL.unscheduledStories row))
+
+        isUnscheduledItems =
+            isUnscheduledFeature || isUnscheduledStories
+
+        emptyFeatureCell : Html Msg
+        emptyFeatureCell =
+            div [ A.class "p-0 m-0" ] []
 
         -- INSIDE featureRowView, in the local `featureCell`:
-        featureCell : Html Msg
-        featureCell =
+        fullFeatureCell : Html Msg
+        fullFeatureCell =
             let
                 baseCls : String
                 baseCls =
@@ -445,40 +317,39 @@ featureRowView model row =
                 -- “Unscheduled” tray (Missing / WholePI / OutsidePI stories)
                 tray : List (Html Msg)
                 tray =
-                    let
-                        unsched =
-                            unscheduledStories row
-                    in
-                    [ div [ A.class "mt-1 flex flex-col gap-1" ]
-                        (List.map (\s -> storyCard False can s) unsched)
-                    ]
+                    if isUnscheduledStories then
+                        [ div [ A.class "mt-1 rounded-lg border border-slate-200 bg-white/70 p-1" ]
+                            [ div [ A.class "text-[9px] text-slate-500 uppercase" ] [ text "Stories" ]
+                            , div [ A.class "flex flex-col gap-1" ]
+                                (List.map (\s -> storyCard False can s) (GL.unscheduledStories row))
+                            ]
+                        ]
 
-                -- if List.isEmpty unsched then
-                --     []
-                --
-                -- else
-                --     [ div [ A.class "mt-1 rounded-lg border border-slate-200 bg-white/70 p-1" ]
-                --         [ div [ A.class "text-[10px] uppercase tracking-wide text-slate-500 mb-1" ] [ text "Unscheduled" ]
-                --         , div [ A.class "flex flex-col gap-1" ]
-                --             (List.map (\s -> storyCard False can s) unsched)
-                --         ]
-                --     ]
-                -- When delivery is Nothing, also show the feature card here (draggable only if can)
+                    else
+                        []
+
                 maybeFeatureCard : List (Html Msg)
                 maybeFeatureCard =
-                    case row.iteration of
-                        InPI _ ->
-                            []
+                    if isUnscheduledFeature then
+                        [ featureCard False warnKind can row ]
 
-                        _ ->
-                            [ featureCard False warnKind can row ]
+                    else
+                        []
+
+                maybeText : List (Html Msg)
+                maybeText =
+                    if isUnscheduledFeature then
+                        [ span [ A.class "text-[9px] text-slate-500 uppercase" ] [ text "Feature" ] ]
+
+                    else
+                        []
             in
             div
                 [ A.class baseCls
                 , A.style "backdrop-filter" "blur(2px)"
                 ]
                 (div [ A.class "flex items-center justify-between gap-2 min-w-0" ]
-                    [ span [ A.class "text-[12px] font-semibold truncate" ] [ text row.title ] ]
+                    maybeText
                     :: maybeFeatureCard
                     ++ tray
                 )
@@ -488,7 +359,13 @@ featureRowView model row =
             List.map (\ix -> sprintCell model row ix)
                 (List.range 1 model.sprintCount)
     in
-    featureCell :: cells
+    (if isUnscheduledItems then
+        fullFeatureCell
+
+     else
+        emptyFeatureCell
+    )
+        :: cells
 
 
 sprintCell : Model -> Feature -> Int -> Html Msg
@@ -496,7 +373,7 @@ sprintCell model row ix =
     let
         can : Bool
         can =
-            canInteract row
+            GL.canInteract row
 
         -- 1) Content in this cell -----------------------------------
         storiesHere : List Story
@@ -555,7 +432,7 @@ sprintCell model row ix =
                         False
 
                     else
-                        ix >= lastStorySprint row
+                        ix >= GL.lastStorySprint row
 
         -- 3) Hover state (valid sprint && valid row)
         hoveredForStory : Bool
@@ -665,7 +542,7 @@ sprintCell model row ix =
         )
         (List.map (\s -> storyCard (isGhostStory s) can s) storiesHere
             ++ (if isDeliveryHere then
-                    [ featureCard isGhostDelivery (selectWarnKind row) can row ]
+                    [ featureCard isGhostDelivery (GL.selectWarnKind row) can row ]
 
                 else
                     []
@@ -717,8 +594,9 @@ storyCard isGhost can s =
              else
                 [ span [ A.class "font-medium truncate text-[13px]" ] [ text s.title ] ]
             )
-        , -- RIGHT: warning badge (if any)
-          div [ A.class "flex items-center shrink-0" ] [ warnIterationBadge Tiny s.iteration ]
+
+        --  Don't need iteration warning?!?!
+        --, div [ A.class "flex items-center shrink-0" ] [ warnIterationBadge Tiny s.iteration ]
         ]
 
 
@@ -768,15 +646,17 @@ featureCard isGhost warnKind can row =
                 [ -- row 1: title + status + warn
                   div [ A.class "flex items-center justify-between gap-2 min-w-0" ]
                     [ span [ A.class "text-[13px] font-semibold truncate" ] [ text row.title ]
-                    , div [ A.class "flex items-center gap-1 shrink-0" ]
-                        [ warnBadge Tiny warnKind ]
                     ]
                 , -- row 2: delivery + test chips
-                  div [ A.class "mt-1 flex items-center justify-between gap-2 min-w-0" ]
-                    [ -- statusPill Tiny row.status
-                      testStrip can row.featureId row.tests
-                    , warnIterationBadge Tiny row.iteration
-                    ]
+                  if warnKind == NoWarn then
+                    div [ A.class "mt-1 flex items-center justify-between gap-2 min-w-0" ]
+                        [ statusPill Tiny row.status
+                        , testStrip can row.featureId row.tests
+                        ]
+
+                  else
+                    div [ A.class "flex items-center gap-1 shrink-0" ]
+                        [ warnBadge Tiny warnKind ]
                 ]
             ]
         ]

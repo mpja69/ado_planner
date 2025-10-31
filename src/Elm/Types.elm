@@ -38,9 +38,9 @@ type TestKind
 
 type FeatureWarn
     = NoWarn
-    | WarnAfter -- A feature has stories AFTER it self, (with regards to IterationPath)
-    | WarnStoriesNotDone -- Some of the feature's stories are not done, (while the feture is)
-    | WarnFeatureLagging -- Some of the feature's stories have started, but the feature has not
+    | WarnStoryAfter -- A feature has stories AFTER it self, (with regards to IterationPath)
+    | WarnStoryOpen -- Some of the feature's stories are not done, (while the feture is)
+    | WarnStoryStarted -- Some of the feature's stories have started, but the feature has not
 
 
 type alias Feature =

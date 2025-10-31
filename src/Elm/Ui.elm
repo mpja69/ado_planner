@@ -14,7 +14,7 @@ module Ui exposing
 
 import Html exposing (Html, div, span, text)
 import Html.Attributes as A
-import Status exposing (Status(..), statusLabel)
+import Status exposing (Status(..), label)
 import Types exposing (FeatureWarn(..), Iteration(..))
 
 
@@ -92,13 +92,13 @@ warnToneClasses w =
     case w of
         -- WarnNeedsDelivery ->
         --     uiToneClasses Amber
-        WarnAfter ->
+        WarnStoryAfter ->
             uiToneClasses Amber
 
-        WarnStoriesNotDone ->
+        WarnStoryOpen ->
             uiToneClasses Rose
 
-        WarnFeatureLagging ->
+        WarnStoryStarted ->
             uiToneClasses Amber
 
         NoWarn ->
@@ -160,7 +160,7 @@ statusPill sz st =
             statusToneClasses st
 
         label =
-            statusLabel st
+            Status.label st
     in
     span
         [ A.class ("inline-flex items-center rounded-md border " ++ badgeSizeClasses sz ++ " " ++ tone)
@@ -186,14 +186,14 @@ warnBadge sz kind =
 
                 label =
                     case kind of
-                        WarnAfter ->
-                            "⚠ move after"
+                        WarnStoryAfter ->
+                            "⚠ Stories planned after!"
 
-                        WarnStoriesNotDone ->
-                            "⚠ close stories"
+                        WarnStoryOpen ->
+                            "⚠ Stories are not done!"
 
-                        WarnFeatureLagging ->
-                            "⚠ start feature"
+                        WarnStoryStarted ->
+                            "⚠ Feature is not started!"
 
                         NoWarn ->
                             ""
@@ -234,7 +234,7 @@ testStripView : UiSize -> List (Html msg) -> Html msg
 testStripView size chips =
     case size of
         Tiny ->
-            div [ A.class "inline-flex items-center gap-0.5" ] chips
+            div [ A.class "inline-flex items-center gap-0.1" ] chips
 
         Small ->
             div [ A.class "inline-flex items-center gap-1" ] chips
@@ -273,19 +273,19 @@ iterationLabel iter =
         InPI _ ->
             Nothing
 
-        -- Missing ->
-        --     Just "⚠ no sprint"
-        --
-        -- WholePI ->
-        --     Just "⚠ whole PI"
-        --
-        -- OutsidePI ->
-        --     Just "⚠ wrong PI"
-        _ ->
-            Just "⚠ set sprint"
+        Missing ->
+            Just "⚠ no sprint"
+
+        WholePI ->
+            Just "⚠ whole PI"
+
+        OutsidePI ->
+            Just "⚠ wrong PI"
 
 
 
+-- _ ->
+--     Just "⚠ set sprint"
 -- Badge för storyns iteration-varning (NoWarn-fall ger tom span)
 
 

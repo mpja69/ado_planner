@@ -1,4 +1,4 @@
-module Status exposing (..)
+module Status exposing (Status(..), fromADO, isClosed, isInProgress, isNew, isOpen, isStarted, label)
 
 
 type Status
@@ -41,8 +41,8 @@ isInProgress st =
             False
 
 
-statusLabel : Status -> String
-statusLabel st =
+label : Status -> String
+label st =
     case st of
         New ->
             "New"
@@ -57,8 +57,8 @@ statusLabel st =
             "Closed"
 
 
-statusFromADO : String -> Status
-statusFromADO s =
+fromADO : String -> Status
+fromADO s =
     case String.toLower s of
         "closed" ->
             Closed
@@ -74,3 +74,18 @@ statusFromADO s =
 
         _ ->
             New
+
+
+
+-- Thin, interface-like, adapter, for any item that has a Status field, i.e both the Feature and Story
+-- Prefix "Has" indicates that there is a field of ...
+-- Suffix "On" indicates that the function is used on a adapter
+
+
+type alias HasStatus a =
+    { a | status : Status }
+
+
+labelOn : HasStatus a -> String
+labelOn s =
+    label s.status
