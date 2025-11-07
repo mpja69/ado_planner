@@ -51,6 +51,7 @@ type alias Feature =
     , closedDate : Maybe Posix -- NEW: ADO ClosedDate (if available)
     , tests : Tests -- mapped from tags later
     , stories : List Story
+    , tags : List String
     }
 
 
@@ -58,3 +59,4 @@ type AdoCmd
     = SetStoryIteration { storyId : Int, toSprintIx : Int }
     | SetFeatureIteration { featureId : Int, toSprintIx : Int }
     | SetFeatureTags { featureId : Int, sit : Bool, uat : Bool, e2e : Bool }
+    | FetchFeatures { artAreaPath : String, piRoot : String } -- NEW

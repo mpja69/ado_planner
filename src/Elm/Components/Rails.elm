@@ -7,12 +7,6 @@ import Svg.Attributes as SA
 import Ui exposing (UiSize(..))
 
 
-
--- type RailSize
---     = Small
---     | Medium
-
-
 type PatternMode
     = Regular
     | Staggered
@@ -45,10 +39,10 @@ railSpec size mode =
             , padTopPx = 7
             , cols = 2
             , rows = 2
-            , dotDiameterPx = 2
+            , dotDiameterPx = 3
             , gapXPx = 4
             , gapYPx = 2
-            , dotColor = "rgba(99,102,241,0.50)"
+            , dotColor = "rgba(99,102,241,0.70)"
             , bgColor = "transparent"
             , rounded = True
             , mode = mode
@@ -61,10 +55,10 @@ railSpec size mode =
             , padTopPx = 5
             , cols = 2
             , rows = 3
-            , dotDiameterPx = 2
+            , dotDiameterPx = 3
             , gapXPx = 4
             , gapYPx = 2
-            , dotColor = "rgba(99,102,241,0.50)"
+            , dotColor = "rgba(99,102,241,0.70)"
             , bgColor = "transparent"
             , rounded = True
             , mode = mode
@@ -77,10 +71,10 @@ railSpec size mode =
             , padTopPx = 1
             , cols = 2
             , rows = 5
-            , dotDiameterPx = 2
+            , dotDiameterPx = 3
             , gapXPx = 4
             , gapYPx = 2
-            , dotColor = "rgba(99,102,241,0.50)"
+            , dotColor = "rgba(99,102,241,0.70)"
             , bgColor = "transparent"
             , rounded = True
             , mode = mode

@@ -4,6 +4,7 @@ module Data.Translate exposing
     , translate
     )
 
+import Config
 import Data.Ado as Ado
 import Status
 import Types exposing (..)
@@ -59,21 +60,45 @@ toIteration ctx path =
                 OutsidePI
 
 
-testsFromTags : List String -> Tests
-testsFromTags tags =
+
+-- OLD WAY: HARD CODED WHICH TAGS BECOMES TEST CHIPS
+-- testsFromTags : List String -> Tests
+-- testsFromTags tags =
+--     let
+--         has t =
+--             List.any (\x -> String.toUpper x == t) tags
+--     in
+--     { sit = has "SIT", uat = has "UAT", e2e = has "E2E" }
+--
+--
+-- NEW WAY: CONFIG DECIDES IF THESE TAGS BECOMES TEST CHIPS
+-- Data.Translate.elm
+
+
+deriveTests : Config.TagPolicy -> List String -> Tests
+deriveTests tp tags =
     let
+        up s =
+            String.toUpper s
+
+        tagsU =
+            List.map up tags
+
         has t =
-            List.any (\x -> String.toUpper x == t) tags
+            List.member (up t) tagsU
     in
-    { sit = has "SIT", uat = has "UAT", e2e = has "E2E" }
+    { sit = tp.enableTests && has tp.testTags.sit
+    , uat = tp.enableTests && has tp.testTags.uat
+    , e2e = tp.enableTests && has tp.testTags.e2e
+    }
 
 
 
 -- Main translator: ADO sample → List FeatureRow
 
 
-translate : PiContext -> Ado.Sample -> List Feature
-translate ctx sample =
+translate : Config.Config -> PiContext -> Ado.Sample -> List Feature
+translate cfg ctx sample =
     let
         storiesByFeature : Int -> List Ado.AdoStory
         storiesByFeature fid =
@@ -94,8 +119,9 @@ translate ctx sample =
             , iteration = toIteration ctx f.iterationPath
             , status = Status.fromADO f.state
             , closedDate = Nothing
-            , tests = testsFromTags f.tags
+            , tests = deriveTests cfg.tags f.tags -- THIS NEW INSTEAD OF THE ONE BELOW
             , stories = storiesByFeature f.id |> List.map toStory
+            , tags = List.filter (Config.tagVisibleForChooser cfg.tags) f.tags
             }
     in
     List.map toRow sample.features

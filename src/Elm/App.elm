@@ -2,22 +2,28 @@ module App exposing (main)
 
 import Browser
 import Components.Rails exposing (..)
+import Config
 import Data.Ado as Ado
+import Data.Filter as F
 import Data.Translate as T
-import Grid.Logic as GL
+import Filters.Msg as FM
+import Filters.Types as FT
+import Filters.Update as FU
+import Filters.View as FV
 import Grid.Msg as GM
 import Grid.Types as GT
 import Grid.Update as GU
 import Grid.View as GV
-import Html exposing (Html, div, span, text)
+import Html exposing (Html, div, text)
 import Html.Attributes as A
-import Html.Events
-import Json.Decode
+import Lens
+import Set
 import Status exposing (..)
 import Types exposing (..)
-import Ui exposing (UiSize(..), cardToneForStatus, statusPill, testChipView, testStripView, warnBadge)
+import Ui exposing (UiSize(..))
 
-
+import Data.Seed as Seed
+import Filters.AreaSelector as AS
 
 -- TODO:
 -- Add planning of of stories without Feature
@@ -41,33 +47,107 @@ type alias Model =
     , hoverStorySprint : Maybe Int
     , pi : T.PiContext
     , outbox : List AdoCmd
+    , filters : FT.Model
+    , config : Config.Config
     }
 
 
 init : Model
 init =
     let
-        -- choose the PI and sprint labels (fake for now)
+        -- Temporary sprint labels so the grid has headers before any fetch.
+        -- These will be replaced when a real PI is chosen and runIntents builds a new context.
         sprintNames =
-            List.map (\n -> "Sprint " ++ String.fromInt n) (List.range 1 5)
+            [ "Sprint 1", "Sprint 2", "Sprint 3", "Sprint 4", "Sprint 5" ]
 
-        ctx : T.PiContext
+        -- Harmless placeholder PI context; replaced after a real selection.
         ctx =
-            T.buildPi "Contoso\\ART\\PI-2025-1" sprintNames
+            T.buildPi "Contoso\\PI 1" sprintNames
 
-        rowsFromAdo : List Feature
-        rowsFromAdo =
-            T.translate ctx Ado.sample
+        -- Filters: start from FT.init, plug in hard-coded PI roots, and seed the custom Area selector
+        base : FT.Model
+        base =
+            FT.init
+
+        filters0 : FT.Model
+        filters0 =
+            { base | options = { iterations = Seed.piRoots } }
+
+        -- Feed Areas + (optional) favorites into the custom selector
+        (as1, _) =
+            AS.update (AS.ReplaceAreas Seed.areas) filters0.areaSel
+
+        (as2, _) =
+            AS.update (AS.ReplaceFavorites []) as1
+
+        filters1 : FT.Model
+        filters1 =
+            { filters0 | areaSel = as2 }
     in
     { sprintCount = List.length sprintNames
-    , rows = rowsFromAdo
+    , rows = []
     , draggingDelivery = Nothing
     , hoverDeliverySprint = Nothing
     , draggingStory = Nothing
     , hoverStorySprint = Nothing
     , pi = ctx
     , outbox = []
+    , filters = filters1
+    , config = Config.default
     }
+
+
+-- Kör alla AdoCmd-intents synkront och töm outbox
+
+
+runIntents : Model -> Model
+runIntents model =
+    let
+        step : AdoCmd -> Model -> Model
+        step intent m =
+            case intent of
+                FetchFeatures { artAreaPath, piRoot } ->
+                    let
+                        sub =
+                            F.subsetSample artAreaPath piRoot Ado.sample
+
+                        sprintNames =
+                            Seed.sprintNamesFor piRoot
+
+                        ctx =
+                            T.buildPi piRoot sprintNames
+
+                        rows2 =
+                            T.translate model.config ctx sub
+
+                        -- NEW: derive visible tag list from the subset
+                        allTags =
+                            F.deriveTagsFromSample model.config.tags sub
+
+                        -- Keep only selected tags that still exist
+                        allowed =
+                            Set.fromList allTags
+
+                        keptSel =
+                            Set.intersect model.filters.sel.includeTags allowed
+
+                        filters2 =
+                            model.filters
+                                |> Lens.set FT.allTagsL allTags
+                                |> Lens.set (Lens.compose FT.selectionL FT.includeTagsL) keptSel
+                    in
+                    { m
+                        | rows = rows2
+                        , sprintCount = List.length sprintNames
+                        , outbox = []
+                        , filters = filters2
+                    }
+
+                _ ->
+                    -- not handled here; leave model as-is
+                    m
+    in
+    List.foldl step model model.outbox
 
 
 
@@ -75,20 +155,9 @@ init =
 
 
 type Msg
-    = NoOp
-    | Grid GM.Msg
-
-
-
---     ToggleTest Int TestKind
--- | DeliveryDragStart Int
--- | DeliveryDragEnd
--- | HoverDelivery (Maybe Int)
--- | DeliveryDrop Int
--- | StoryDragStart Int
--- | StoryDragEnd
--- | HoverStory (Maybe Int)
--- | StoryDrop Int
+    = Grid GM.Msg
+    | Filters FM.Msg
+    | NoOp
 
 
 update : Msg -> Model -> Model
@@ -113,125 +182,24 @@ update msg model =
                 , outbox = intents ++ model.outbox
             }
 
+        Filters fmsg ->
+            let
+                filters2 =
+                    FU.update fmsg model.filters
 
+                newIntents =
+                    case ( filters2.sel.area, filters2.sel.iteration ) of
+                        ( Just art, Just pi ) ->
+                                [ FetchFeatures { artAreaPath = art, piRoot = pi } ]
 
--- -- ===== Feature delivery drag =====
--- DeliveryDragStart featureId ->
---     { model | draggingDelivery = Just featureId, hoverDeliverySprint = Nothing }
---
--- DeliveryDragEnd ->
---     { model | draggingDelivery = Nothing, hoverDeliverySprint = Nothing }
---
--- HoverDelivery maybeIx ->
---     { model | hoverDeliverySprint = maybeIx }
---
--- DeliveryDrop newSprintIx ->
---     case model.draggingDelivery of
---         Nothing ->
---             model
---
---         Just fid ->
---             let
---                 -- update the delivery in rows
---                 updateRow r =
---                     if r.featureId == fid then
---                         { r | iteration = InPI newSprintIx }
---
---                     else
---                         r
---
---                 newRows =
---                     List.map updateRow model.rows
---
---                 -- enqueue ADO intent
---                 newOutbox =
---                     SetFeatureIteration { featureId = fid, toSprintIx = newSprintIx }
---                         :: model.outbox
---             in
---             { model
---                 | rows = newRows
---                 , draggingDelivery = Nothing
---                 , hoverDeliverySprint = Nothing
---                 , outbox = newOutbox
---             }
---
--- -- ===== Story drag =====
--- StoryDragStart storyId ->
---     { model | draggingStory = Just storyId, hoverStorySprint = Nothing }
---
--- StoryDragEnd ->
---     { model | draggingStory = Nothing, hoverStorySprint = Nothing }
---
--- HoverStory maybeIx ->
---     { model | hoverStorySprint = maybeIx }
---
--- StoryDrop newSprintIx ->
---     case model.draggingStory of
---         Nothing ->
---             model
---
---         Just sid ->
---             let
---                 -- update targeted story's iteration to InPI newSprintIx
---                 updateStory s =
---                     if s.id == sid then
---                         { s | iteration = InPI newSprintIx }
---
---                     else
---                         s
---
---                 updateRow r =
---                     { r | stories = List.map updateStory r.stories }
---
---                 newRows =
---                     List.map updateRow model.rows
---
---                 newOutbox =
---                     SetStoryIteration { storyId = sid, toSprintIx = newSprintIx }
---                         :: model.outbox
---             in
---             { model
---                 | rows = newRows
---                 , draggingStory = Nothing
---                 , hoverStorySprint = Nothing
---                 , outbox = newOutbox
---             }
---
--- -- ===== Tests toggle (tags) =====
--- ToggleTest featureId kind ->
---     let
---         newRows =
---             List.map (GL.toggleTest featureId kind) model.rows
---
---         updated =
---             List.filter (\r -> r.featureId == featureId) newRows
---                 |> List.head
---
---         newOutbox =
---             case updated of
---                 Just r2 ->
---                     SetFeatureTags
---                         { featureId = featureId
---                         , sit = r2.tests.sit
---                         , uat = r2.tests.uat
---                         , e2e = r2.tests.e2e
---                         }
---                         :: model.outbox
---
---                 Nothing ->
---                     model.outbox
---     in
---     { model | rows = newRows, outbox = newOutbox }
--- HELPERS
-
-
-attrsIf : Bool -> List (Html.Attribute Msg) -> List (Html.Attribute Msg)
-attrsIf cond attrs =
-    if cond then
-        attrs
-
-    else
-        []
+                        _ ->
+                            []
+            in
+            { model
+                | filters = filters2
+                , outbox = model.outbox ++ newIntents
+            }
+                |> runIntents
 
 
 
@@ -246,458 +214,46 @@ main =
 
 view : Model -> Html Msg
 view model =
-    div [ A.class "w-full h-screen p-6" ]
-        [ div [ A.class "text-2xl font-bold mb-4" ] [ text "Sprint Planner" ]
-        , GV.view (GT.fromApp model) |> Html.map Grid
+    let
+        toggles =
+            { showTests = model.config.tags.enableTests }
+
+        selectedTags : List String
+        selectedTags =
+            model.filters.sel.includeTags |> Set.toList
+
+        rowsFiltered : List Feature
+        rowsFiltered =
+            case selectedTags of
+                [] ->
+                    model.rows
+
+                _ ->
+                    let
+                        hasAll sel r =
+                            List.all (\t -> List.member t r.tags) sel
+                    in
+                    List.filter (hasAll selectedTags) model.rows
+
+        gridModel =
+            model
+                |> GT.fromApp
+                |> (\g -> { g | rows = rowsFiltered })
+
+        noRowsMsg : Html msg
+        noRowsMsg =
+            div
+                [ A.class "mt-6 text-center text-slate-400 italic" ]
+                [ text "No features match selected tags" ]
+
+        -- override rows for view
+    in
+    div [ A.class ("w-full h-screen p-6" ++ GV.appBgColor) ]
+        [ div [ A.class "text-2xl font-bold" ] [ text "Sprint Planner" ]
+        , FV.view model.config (not (List.isEmpty model.rows)) model.filters |> Html.map Filters
+        , if List.isEmpty rowsFiltered then
+            noRowsMsg
+
+          else
+            GV.view toggles gridModel |> Html.map Grid
         ]
-
-
-
--- gridView : Model -> Html Msg
--- gridView model =
---     let
---         unscheduled =
---             GL.hasUnscheduledItems model.rows
---
---         leftColWidth =
---             if unscheduled then
---                 "220px"
---
---             else
---                 "12px"
---
---         templateCols =
---             leftColWidth ++ " repeat(" ++ String.fromInt model.sprintCount ++ ", minmax(0, 1fr))"
---     in
---     div
---         [ A.style "display" "grid"
---         , A.style "grid-template-columns" templateCols
---         , A.class "gap-2"
---         ]
---         (headerRow unscheduled model.sprintCount
---             :: List.concatMap (featureRowView model) model.rows
---         )
---
---
--- headerRow : Bool -> Int -> Html Msg
--- headerRow unscheduled n =
---     let
---         headCell s =
---             div [ A.class "text-xs font-semibold uppercase tracking-wide text-slate-600 px-2 py-1" ] [ text s ]
---
---         mutedCell =
---             -- empty/transparent cell so the grid stays aligned
---             div [ A.class "px-0 py-0" ] []
---     in
---     div [ A.class "contents" ]
---         ((if unscheduled then
---             headCell "Unscheduled"
---
---           else
---             mutedCell
---          )
---             :: List.map (\i -> headCell ("Sprint " ++ String.fromInt i)) (List.range 1 n)
---         )
---
---
--- featureRowView : Model -> Feature -> List (Html Msg)
--- featureRowView model row =
---     let
---         can =
---             GL.canInteract row
---
---         --mode
---         warnKind : FeatureWarn
---         warnKind =
---             GL.selectWarnKind row
---
---         isUnscheduledFeature =
---             GL.isUnscheduled row.iteration
---
---         isUnscheduledStories =
---             not (List.isEmpty (GL.unscheduledStories row))
---
---         isUnscheduledItems =
---             isUnscheduledFeature || isUnscheduledStories
---
---         emptyFeatureCell : Html Msg
---         emptyFeatureCell =
---             div [ A.class "p-0 m-0" ] []
---
---         -- INSIDE featureRowView, in the local `featureCell`:
---         fullFeatureCell : Html Msg
---         fullFeatureCell =
---             let
---                 baseCls : String
---                 baseCls =
---                     "px-3 py-2 rounded-xl border font-medium sticky left-0 z-10 transition "
---                         ++ " border-slate-200"
---
---                 -- “Unscheduled” tray (Missing / WholePI / OutsidePI stories)
---                 tray : List (Html Msg)
---                 tray =
---                     if isUnscheduledStories then
---                         [ div [ A.class "mt-1 rounded-lg border border-slate-200 bg-white/70 p-1" ]
---                             [ div [ A.class "text-[9px] text-slate-500 uppercase" ] [ text "Stories" ]
---                             , div [ A.class "flex flex-col gap-1" ]
---                                 (List.map (\s -> storyCard False can s) (GL.unscheduledStories row))
---                             ]
---                         ]
---
---                     else
---                         []
---
---                 maybeFeatureCard : List (Html Msg)
---                 maybeFeatureCard =
---                     if isUnscheduledFeature then
---                         [ featureCard False warnKind can row ]
---
---                     else
---                         []
---
---                 maybeText : List (Html Msg)
---                 maybeText =
---                     if isUnscheduledFeature then
---                         [ span [ A.class "text-[9px] text-slate-500 uppercase" ] [ text "Feature" ] ]
---
---                     else
---                         []
---             in
---             div
---                 [ A.class baseCls
---                 , A.style "backdrop-filter" "blur(2px)"
---                 ]
---                 (div [ A.class "flex items-center justify-between gap-2 min-w-0" ]
---                     maybeText
---                     :: maybeFeatureCard
---                     ++ tray
---                 )
---
---         cells : List (Html Msg)
---         cells =
---             List.map (\ix -> sprintCell model row ix)
---                 (List.range 1 model.sprintCount)
---     in
---     (if isUnscheduledItems then
---         fullFeatureCell
---
---      else
---         emptyFeatureCell
---     )
---         :: cells
---
---
--- sprintCell : Model -> Feature -> Int -> Html Msg
--- sprintCell model row ix =
---     let
---         can : Bool
---         can =
---             GL.canInteract row
---
---         -- 1) Content in this cell -----------------------------------
---         storiesHere : List Story
---         storiesHere =
---             row.stories
---                 |> List.filter
---                     (\s ->
---                         case s.iteration of
---                             InPI k ->
---                                 k == ix
---
---                             _ ->
---                                 False
---                     )
---
---         isDeliveryHere : Bool
---         isDeliveryHere =
---             case row.iteration of
---                 InPI k ->
---                     k == ix
---
---                 _ ->
---                     False
---
---         -- 2) Drag target validity (valid row)
---         validStoryTarget : Bool
---         validStoryTarget =
---             case model.draggingStory of
---                 Nothing ->
---                     False
---
---                 Just sid ->
---                     let
---                         belongsHere =
---                             List.any (\s -> s.id == sid) row.stories
---
---                         withinDeliveryGate =
---                             case row.iteration of
---                                 InPI d ->
---                                     ix <= d
---
---                                 _ ->
---                                     True
---                     in
---                     belongsHere && withinDeliveryGate
---
---         validDeliveryTarget : Bool
---         validDeliveryTarget =
---             case model.draggingDelivery of
---                 Nothing ->
---                     False
---
---                 Just fid ->
---                     -- Only this feature's delivery, and only at/after last story sprint
---                     if fid /= row.featureId then
---                         False
---
---                     else
---                         ix >= GL.lastStorySprint row
---
---         -- 3) Hover state (valid sprint && valid row)
---         hoveredForStory : Bool
---         hoveredForStory =
---             model.hoverStorySprint == Just ix && validStoryTarget
---
---         hoveredForDelivery : Bool
---         hoveredForDelivery =
---             model.hoverDeliverySprint == Just ix && validDeliveryTarget
---
---         -- 4) Visuals -------------------------------------------------
---         baseClass : String
---         baseClass =
---             "min-w-0 px-3 py-2 rounded-xl border min-h-[84px] flex flex-col gap-1 transition "
---
---         -- ++ toneCls
---         validCls : String
---         validCls =
---             if can && (validStoryTarget || validDeliveryTarget) then
---                 " border-indigo-300 border-dashed "
---
---             else
---                 " border-slate-200 "
---
---         hoverCls : String
---         hoverCls =
---             if can && (hoveredForStory || hoveredForDelivery) then
---                 " ring-2 ring-indigo-400 bg-indigo-50/40 "
---
---             else
---                 ""
---
---         forbidClass : String
---         forbidClass =
---             if can then
---                 ""
---
---             else
---                 " cursor-not-allowed"
---
---         -- 5) Handlers (built from validity; attached by the ROW gate)
---         storyHandlers : List (Html.Attribute Msg)
---         storyHandlers =
---             if validStoryTarget then
---                 [ Html.Events.on "dragenter" (Json.Decode.succeed (HoverStory (Just ix)))
---                 , Html.Events.preventDefaultOn "dragover" (Json.Decode.succeed ( HoverStory (Just ix), True ))
---                 , Html.Events.on "dragleave" (Json.Decode.succeed (HoverStory Nothing))
---                 , Html.Events.on "drop" (Json.Decode.succeed (StoryDrop ix))
---                 ]
---
---             else
---                 []
---
---         deliveryHandlers : List (Html.Attribute Msg)
---         deliveryHandlers =
---             if validDeliveryTarget then
---                 [ Html.Events.on "dragenter" (Json.Decode.succeed (HoverDelivery (Just ix)))
---                 , Html.Events.preventDefaultOn "dragover" (Json.Decode.succeed ( HoverDelivery (Just ix), True ))
---                 , Html.Events.on "dragleave" (Json.Decode.succeed (HoverDelivery Nothing))
---                 , Html.Events.on "drop" (Json.Decode.succeed (DeliveryDrop ix))
---                 ]
---
---             else
---                 []
---
---         -- 6) Ghosting ------------------------------------------------
---         -- Ghost the original story chip when that specific story is being dragged
---         isGhostStory : Story -> Bool
---         isGhostStory s =
---             case model.draggingStory of
---                 Just sid ->
---                     sid
---                         == s.id
---                         && (case s.iteration of
---                                 InPI k ->
---                                     k == ix
---
---                                 _ ->
---                                     False
---                            )
---
---                 Nothing ->
---                     False
---
---         -- Ghost the original feature delivery card in its original cell
---         isGhostDelivery : Bool
---         isGhostDelivery =
---             case ( model.draggingDelivery, row.iteration ) of
---                 ( Just fid, InPI k ) ->
---                     fid == row.featureId && k == ix
---
---                 _ ->
---                     False
---
---         -- 7) Content helpers -----------------------------------------
---         emptyHint : List (Html Msg)
---         emptyHint =
---             if List.isEmpty storiesHere && not isDeliveryHere then
---                 [ div [ A.class "text-[11px] text-slate-400 italic" ] [ text "–" ] ]
---
---             else
---                 []
---     in
---     div
---         (A.class (baseClass ++ validCls ++ hoverCls ++ forbidClass)
---             :: attrsIf can (storyHandlers ++ deliveryHandlers)
---         )
---         (List.map (\s -> storyCard (isGhostStory s) can s) storiesHere
---             ++ (if isDeliveryHere then
---                     [ featureCard isGhostDelivery (GL.selectWarnKind row) can row ]
---
---                 else
---                     []
---                )
---             ++ emptyHint
---         )
---
---
--- storyCard : Bool -> Bool -> Story -> Html Msg
--- storyCard isGhost can s =
---     let
---         ghostClass =
---             if isGhost then
---                 " opacity-30 saturate-50"
---
---             else
---                 ""
---
---         dragAttrs : List (Html.Attribute Msg)
---         dragAttrs =
---             if can then
---                 [ A.attribute "draggable" "true"
---                 , A.attribute "ondragstart" "event.dataTransfer.effectAllowed='move'; event.dataTransfer.dropEffect='move'"
---                 , A.attribute "ondragover" "event.preventDefault(); event.dataTransfer.dropEffect='move'"
---                 , Html.Events.on "dragstart" (Json.Decode.succeed (StoryDragStart s.id))
---                 , Html.Events.on "dragend" (Json.Decode.succeed StoryDragEnd)
---                 ]
---
---             else
---                 []
---     in
---     div
---         ([ A.class
---             ("min-w-0 flex items-center justify-between gap-2 pl-1 pr-2 py-1 rounded-lg border select-none "
---                 ++ cardToneForStatus s.status
---                 ++ ghostClass
---             )
---          , A.title s.title
---          ]
---             ++ dragAttrs
---         )
---         [ -- LEFT: rail + title (truncates nicely)
---           div [ A.class "min-w-0 inline-flex items-center gap-1.5" ]
---             (if can then
---                 [ dotRailPx (railSpec Small Regular)
---                 , span [ A.class "font-medium truncate text-[13px]" ] [ text s.title ]
---                 ]
---
---              else
---                 [ span [ A.class "font-medium truncate text-[13px]" ] [ text s.title ] ]
---             )
---
---         --  Don't need iteration warning?!?!
---         --, div [ A.class "flex items-center shrink-0" ] [ warnIterationBadge Tiny s.iteration ]
---         ]
---
---
--- featureCard : Bool -> FeatureWarn -> Bool -> Feature -> Html Msg
--- featureCard isGhost warnKind can row =
---     let
---         -- visuals
---         ghostClass =
---             if isGhost then
---                 " opacity-30 saturate-50"
---
---             else
---                 ""
---
---         dragAttrs : List (Html.Attribute Msg)
---         dragAttrs =
---             if can then
---                 [ A.attribute "draggable" "true"
---                 , A.attribute "ondragstart" "event.dataTransfer.effectAllowed='move'; event.dataTransfer.dropEffect='move'"
---                 , A.attribute "ondragover" "event.preventDefault(); event.dataTransfer.dropEffect='move'"
---                 , Html.Events.on "dragstart" (Json.Decode.succeed (DeliveryDragStart row.featureId))
---                 , Html.Events.on "dragend" (Json.Decode.succeed DeliveryDragEnd)
---                 ]
---
---             else
---                 []
---     in
---     div
---         (A.class
---             ("mt-1 rounded-xl border select-none overflow-hidden "
---                 ++ cardToneForStatus row.status
---                 ++ ghostClass
---             )
---             :: dragAttrs
---         )
---         [ -- ROW: rail + content
---           div [ A.class "flex items-stretch" ]
---             [ -- left rail (keep your existing rail call; you said you refactored it)
---               if can then
---                 div [ A.class "ml-2 self-center" ]
---                     [ dotRailPx (railSpec Medium Regular) ]
---
---               else
---                 div [ A.class "ml-2" ] []
---             , -- content
---               div [ A.class "flex-1 pl-1 pr-2 py-2 min-w-0" ]
---                 [ -- row 1: title + status + warn
---                   div [ A.class "flex items-center justify-between gap-2 min-w-0" ]
---                     [ span [ A.class "text-[13px] font-semibold truncate" ] [ text row.title ]
---                     ]
---                 , -- row 2: delivery + test chips
---                   if warnKind == NoWarn then
---                     div [ A.class "mt-1 flex items-center justify-between gap-2 min-w-0" ]
---                         [ statusPill Tiny row.status
---                         , testStrip can row.featureId row.tests
---                         ]
---
---                   else
---                     div [ A.class "flex items-center gap-1 shrink-0" ]
---                         [ warnBadge Tiny warnKind ]
---                 ]
---             ]
---         ]
---
---
--- testStrip : Bool -> Int -> Tests -> Html Msg
--- testStrip can featureId tests =
---     let
---         mk label active kind =
---             testChipView Tiny
---                 { label = label, active = active }
---                 (if can then
---                     [ Html.Events.onClick (ToggleTest featureId kind) ]
---
---                  else
---                     []
---                 )
---
---         chips =
---             [ mk "SIT" tests.sit SIT
---             , mk "UAT" tests.uat UAT
---             , mk "E2E" tests.e2e E2E
---             ]
---     in
---     testStripView Tiny chips

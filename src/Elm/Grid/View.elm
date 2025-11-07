@@ -1,4 +1,4 @@
-module Grid.View exposing (view)
+module Grid.View exposing (appBgColor, view)
 
 import Components.Rails exposing (..)
 import Grid.Logic as GL
@@ -10,6 +10,10 @@ import Html.Events
 import Json.Decode
 import Types exposing (..)
 import Ui exposing (..)
+
+
+type alias Toggles =
+    { showTests : Bool }
 
 
 
@@ -25,12 +29,40 @@ attrsIf cond attrs =
         []
 
 
+appBgColor : String
+appBgColor =
+    " bg-white"
+
+
+gridBgColor : String
+gridBgColor =
+    "  bg-slate-50/70 rounded-xl p-2"
+
+
+cellBgColor : String
+cellBgColor =
+    "  bg-white/95 backdrop-blur"
+
+
+
+-- Used with toggles
+
+
+maybe : Bool -> Html msg -> List (Html msg)
+maybe cond node =
+    if cond then
+        [ node ]
+
+    else
+        []
+
+
 
 -- VIEW
 
 
-view : GT.Model -> Html GM.Msg
-view model =
+view : Toggles -> GT.Model -> Html GM.Msg
+view toggles model =
     let
         unscheduled =
             GL.hasUnscheduledItems model.rows
@@ -48,10 +80,10 @@ view model =
     div
         [ A.style "display" "grid"
         , A.style "grid-template-columns" templateCols
-        , A.class "gap-2"
+        , A.class ("gap-2" ++ gridBgColor)
         ]
         (headerRow unscheduled model.sprintCount
-            :: List.concatMap (featureRowView model) model.rows
+            :: List.concatMap (featureRowView toggles model) model.rows
         )
 
 
@@ -76,8 +108,8 @@ headerRow unscheduled n =
         )
 
 
-featureRowView : GT.Model -> Feature -> List (Html GM.Msg)
-featureRowView model row =
+featureRowView : Toggles -> GT.Model -> Feature -> List (Html GM.Msg)
+featureRowView toggles model row =
     let
         can =
             GL.canInteract row
@@ -108,6 +140,7 @@ featureRowView model row =
                 baseCls =
                     "px-3 py-2 rounded-xl border font-medium sticky left-0 z-10 transition "
                         ++ " border-slate-200"
+                        ++ cellBgColor
 
                 -- “Unscheduled” tray (Missing / WholePI / OutsidePI stories)
                 tray : List (Html GM.Msg)
@@ -126,7 +159,7 @@ featureRowView model row =
                 maybeFeatureCard : List (Html GM.Msg)
                 maybeFeatureCard =
                     if isUnscheduledFeature then
-                        [ featureCard False warnKind can row ]
+                        [ featureCard toggles False warnKind can row ]
 
                     else
                         []
@@ -151,7 +184,7 @@ featureRowView model row =
 
         cells : List (Html GM.Msg)
         cells =
-            List.map (\ix -> sprintCell model row ix)
+            List.map (\ix -> sprintCell toggles model row ix)
                 (List.range 1 model.sprintCount)
     in
     (if isUnscheduledItems then
@@ -163,8 +196,8 @@ featureRowView model row =
         :: cells
 
 
-sprintCell : GT.Model -> Feature -> Int -> Html GM.Msg
-sprintCell model row ix =
+sprintCell : Toggles -> GT.Model -> Feature -> Int -> Html GM.Msg
+sprintCell toggles model row ix =
     let
         can : Bool
         can =
@@ -242,6 +275,7 @@ sprintCell model row ix =
         baseClass : String
         baseClass =
             "min-w-0 px-3 py-2 rounded-xl border min-h-[84px] flex flex-col gap-1 transition "
+                ++ cellBgColor
 
         -- ++ toneCls
         validCls : String
@@ -337,7 +371,7 @@ sprintCell model row ix =
         )
         (List.map (\s -> storyCard (isGhostStory s) can s) storiesHere
             ++ (if isDeliveryHere then
-                    [ featureCard isGhostDelivery (GL.selectWarnKind row) can row ]
+                    [ featureCard toggles isGhostDelivery (GL.selectWarnKind row) can row ]
 
                 else
                     []
@@ -395,8 +429,8 @@ storyCard isGhost can s =
         ]
 
 
-featureCard : Bool -> FeatureWarn -> Bool -> Feature -> Html GM.Msg
-featureCard isGhost warnKind can row =
+featureCard : Toggles -> Bool -> FeatureWarn -> Bool -> Feature -> Html GM.Msg
+featureCard toggles isGhost warnKind can row =
     let
         -- visuals
         ghostClass =
@@ -445,9 +479,9 @@ featureCard isGhost warnKind can row =
                 , -- row 2: delivery + test chips
                   if warnKind == NoWarn then
                     div [ A.class "mt-1 flex items-center justify-between gap-2 min-w-0" ]
-                        [ statusPill Tiny row.status
-                        , testStrip can row.featureId row.tests
-                        ]
+                        (statusPill Tiny row.status
+                            :: maybe toggles.showTests (testStrip can row.featureId row.tests)
+                        )
 
                   else
                     div [ A.class "flex items-center gap-1 shrink-0" ]
