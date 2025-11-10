@@ -66,9 +66,13 @@ controlsRow cfg tagsEnabled model =
             -- fixed width
             , AS.view model.areaSel |> Html.map FM.AreaSel
             ]
-            -- ersätt tidigare PI-rendering
-            , Html.div [ A.class "flex items-center justify-center" ]
-                [ piPicker model ]
+
+        -- Iteration (PI) – byt dropdown mot 2-pill picker:
+        , div
+            []
+            [ span [ A.class "block text-[11px] uppercase tracking-wide text-slate-500 mb-1" ] [ text "Iteration (PI)" ]
+            , piPicker model.options.iterations model.sel.iteration
+            ]
         , (if tagsEnabled then
             tagsField True cfg.tags model
 
@@ -89,40 +93,50 @@ tagsFieldSkeleton =
         ]
 
 
-
-piPicker : FT.Model -> Html FM.Msg
-piPicker model =
+piPicker : List String -> Maybe String -> Html FM.Msg
+piPicker piRoots selected =
     let
-        roots =
-            model.options.iterations
+        -- Vi antar exakt 2 rötter: current och next.
+        ( cur, nxt ) =
+            case piRoots of
+                a :: b :: _ ->
+                    ( a, b )
+
+                [ a ] ->
+                    ( a, a )
+
+                _ ->
+                    ( "", "" )
+
+        pill : String -> String -> Html FM.Msg
+        pill root label =
+            let
+                isOn =
+                    Just root == selected
+
+                cls =
+                    if isOn then
+                        "px-3 py-1 rounded-full border border-indigo-300 bg-indigo-50 text-indigo-700 text-xs"
+
+                    else
+                        "px-3 py-1 rounded-full border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 text-xs"
+            in
+            Html.button [ A.class cls, E.onClick (FM.SetIteration root) ] [ text label ]
     in
-    case roots of
-        [] ->
-            -- inget att visa (ex. om vi ännu inte matat in Seed.piRoots i init)
-            Html.span [ A.class "text-slate-400" ] [ text "No PIs" ]
+    Html.div [ A.class "flex items-center gap-2" ]
+        (case ( cur, nxt ) of
+            ( "", "" ) ->
+                [ Html.span [ A.class "text-xs text-slate-400" ] [ text "Choose PI" ] ]
 
-        [ one ] ->
-            -- edge case – visa bara en
-            pill one
+            ( c, n ) ->
+                [ pill c (lastSegment c)
+                , if n /= "" && n /= c then
+                    pill n (lastSegment n)
 
-        _ ->
-            -- visa de två första
-            Html.div [ A.class "flex items-center gap-3" ]
-                [ pill (List.head roots |> Maybe.withDefault "")
-                , pill (List.drop 1 roots |> List.head |> Maybe.withDefault "")
+                  else
+                    Html.text ""
                 ]
-
-pill : String -> Html FM.Msg
-pill label =
-    let
-        cls =
-            "px-4 py-2 rounded-full border border-slate-200 bg-white text-slate-700 cursor-pointer hover:bg-slate-50"
-    in
-    Html.span
-        [ A.class cls
-        , E.onClick (FM.SetIteration label)
-        ]
-        [ text label ]
+        )
 
 
 tagsField : Bool -> Config.TagPolicy -> FT.Model -> Html FM.Msg

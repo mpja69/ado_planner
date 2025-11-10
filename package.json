@@ -4,10 +4,10 @@
 	"private": true,
 	"type": "module",
 	"scripts": {
-		"build": "npm run elm:build && npm run css:build && vite build",
-		"clean": "rimraf dist",
+		"clean": "rimraf dist public/elm.js",
 		"elm:build": "elm make src/Elm/App.elm --output=public/elm.js",
-		"css:build": "tailwindcss -i ./src/styles.css -o ./public/overlay.css --minify"
+		"css:build": "tailwindcss -i ./src/styles.css -o ./public/overlay.css --minify",
+		"build": "npm run elm:build && npm run css:build && vite build --config vite.config.content.ts && vite build --config vite.config.overlay.ts"
 	},
 	"devDependencies": {
 		"@types/chrome": "^0.1.24",
