@@ -42,6 +42,21 @@ port requestAreas : () -> Cmd msg
 port receiveAreas : (List { id : String, name : String } -> msg) -> Sub msg
 
 
+port receivePiMeta : (List { root : String, sprintCount : Int } -> msg) -> Sub msg
+
+
+port requestData : { area : String, pi : String } -> Cmd msg
+
+
+port receiveData :
+    ({ features : List Ado.AdoFeature
+     , stories : List Ado.AdoStory
+     }
+     -> msg
+    )
+    -> Sub msg
+
+
 
 -- TODO:
 -- Add planning of of stories without Feature
@@ -185,8 +200,10 @@ runIntents model =
 subscriptions : Model -> Sub Msg
 subscriptions _ =
     Sub.batch
-        [ receiveIterations GotIterations
-        , receiveAreas GotAreas
+        [ --receiveIterations GotIterations
+          receiveAreas GotAreas
+        , receivePiMeta GotPiMeta
+        , receiveData GotData
         ]
 
 
@@ -197,8 +214,10 @@ subscriptions _ =
 type Msg
     = Grid GM.Msg
     | Filters FM.Msg
-    | GotIterations (List String)
+      -- | GotIterations (List String)
     | GotAreas (List { id : String, name : String })
+    | GotPiMeta (List { root : String, sprintCount : Int })
+    | GotData { features : List Ado.AdoFeature, stories : List Ado.AdoStory }
     | NoOp
 
 
@@ -246,24 +265,23 @@ update msg model =
             in
             ( { model | filters = filters2 }, Cmd.none )
 
-        GotIterations piRoots ->
-            -- Just store the two PI roots in the filter options.
-            -- (No auto-select; the user still clicks the 2-pill picker.)
-            let
-                opts1 =
-                    model.filters.options
-
-                opts2 =
-                    { opts1 | iterations = piRoots }
-
-                filters1 =
-                    model.filters
-
-                filters2 =
-                    { filters1 | options = opts2 }
-            in
-            ( { model | filters = filters2 }, Cmd.none )
-
+        -- GotIterations piRoots ->
+        --     -- Just store the two PI roots in the filter options.
+        --     -- (No auto-select; the user still clicks the 2-pill picker.)
+        --     let
+        --         opts1 =
+        --             model.filters.options
+        --
+        --         opts2 =
+        --             { opts1 | iterations = piRoots }
+        --
+        --         filters1 =
+        --             model.filters
+        --
+        --         filters2 =
+        --             { filters1 | options = opts2 }
+        --     in
+        --     ( { model | filters = filters2 }, Cmd.none )
         Grid gm ->
             let
                 -- convert App.Model -> Grid.Model, then back by copying fields
@@ -288,29 +306,196 @@ update msg model =
                 filters2 =
                     FU.update fmsg model.filters
 
-                newIntents =
+                cmdFetch =
                     case ( filters2.sel.area, filters2.sel.iteration ) of
                         ( Just art, Just pi ) ->
                             if List.isEmpty model.rows then
-                                [ FetchFeatures { artAreaPath = art, piRoot = pi } ]
+                                -- SEND PORT instead of building local sample intent
+                                requestData { area = art, pi = pi }
 
                             else
-                                []
+                                Cmd.none
 
                         _ ->
-                            []
-
-                model2 =
-                    { model
-                        | filters = filters2
-                        , outbox = model.outbox ++ newIntents
-                    }
-                        |> runIntents
+                            Cmd.none
             in
-            ( model2, Cmd.none )
+            ( { model | filters = filters2 }, cmdFetch )
+
+        -- Filters fmsg ->
+        --     let
+        --         filters2 =
+        --             FU.update fmsg model.filters
+        --
+        --         newIntents =
+        --             case ( filters2.sel.area, filters2.sel.iteration ) of
+        --                 ( Just art, Just pi ) ->
+        --                     if List.isEmpty model.rows then
+        --                         [ FetchFeatures { artAreaPath = art, piRoot = pi } ]
+        --
+        --                     else
+        --                         []
+        --
+        --                 _ ->
+        --                     []
+        --
+        --         model2 =
+        --             { model
+        --                 | filters = filters2
+        --                 , outbox = model.outbox ++ newIntents
+        --             }
+        --                 |> runIntents
+        --     in
+        --     ( model2, Cmd.none )
+        GotPiMeta rows ->
+            let
+                -- build Dict root -> sprintCount
+                dict =
+                    List.foldl
+                        (\r acc -> Dict.insert r.root r.sprintCount acc)
+                        Dict.empty
+                        rows
+
+                -- the two PI roots we’ll show as pills
+                roots : List String
+                roots =
+                    List.map .root rows
+
+                -- update Filters: options.iterations = roots
+                filters1 =
+                    model.filters
+
+                opts1 =
+                    filters1.options
+
+                sel1 =
+                    filters1.sel
+
+                keepIter =
+                    case sel1.iteration of
+                        Just old ->
+                            if List.member old roots then
+                                Just old
+
+                            else
+                                Nothing
+
+                        Nothing ->
+                            Nothing
+
+                opts2 =
+                    { opts1 | iterations = roots }
+
+                filters2 =
+                    { filters1
+                        | options = opts2
+                        , sel = { sel1 | iteration = keepIter }
+                    }
+            in
+            ( { model | piSprintCount = dict, filters = filters2 }, Cmd.none )
+
+        GotData payload ->
+            let
+                -- Data is already filtered by (area, pi) in TS, so we can translate directly
+                sample =
+                    { features = payload.features
+                    , stories = payload.stories
+                    }
+
+                -- pick sprint count for the currently selected PI (fallback to 5)
+                piRoot =
+                    Maybe.withDefault "" model.filters.sel.iteration
+
+                sCount =
+                    Dict.get piRoot model.piSprintCount |> Maybe.withDefault 5
+
+                piSeg : String
+                piSeg =
+                    -- last segment of "Alfa Laval Portfolio\PI 30" -> "PI 30"
+                    case List.reverse (String.split "\\" piRoot) of
+                        seg :: _ ->
+                            seg
+
+                        [] ->
+                            "PI"
+
+                sprintNames : List String
+                sprintNames =
+                    List.map
+                        (\n -> piSeg ++ " Sprint " ++ String.fromInt n)
+                        (List.range 1 sCount)
+
+                ctx =
+                    T.buildPi piRoot sprintNames
+
+                -- DEBUG: leave these while verifying
+                _ =
+                    Debug.log "GotData counts (features,stories)"
+                        ( List.length payload.features, List.length payload.stories )
+
+                _ =
+                    case List.filter (\s -> s.parentId /= 0) payload.stories |> List.head of
+                        Just sNonZero ->
+                            Debug.log "First story with parentId /= 0 (title,id,parent)"
+                                ( sNonZero.title, sNonZero.id, sNonZero.parentId )
+
+                        Nothing ->
+                            Debug.log "No stories with parentId /= 0" ( "", 0, 0 )
+
+                _ =
+                    case payload.stories |> List.head of
+                        Just s ->
+                            Debug.log "First story (any) (title,id,parent)"
+                                ( s.title, s.id, s.parentId )
+
+                        Nothing ->
+                            Debug.log "First story (none)" ( "", 0, 0 )
+
+                rows2 =
+                    T.translate model.config ctx sample
+
+                -- refresh tag list from the received data
+                allTags =
+                    F.deriveTagsFromSample model.config.tags sample
+
+                allowed =
+                    Set.fromList allTags
+
+                -- EITHER keep only still-existing tags...
+                keptSel =
+                    Set.intersect model.filters.sel.includeTags allowed
+
+                filters2 =
+                    model.filters
+                        |> Lens.set FT.allTagsL allTags
+                        |> Lens.set (Lens.compose FT.selectionL FT.includeTagsL) keptSel
+            in
+            ( { model
+                | rows = rows2
+                , sprintCount = sCount
+                , pi = ctx
+                , filters = filters2
+              }
+            , Cmd.none
+            )
 
 
 
+-- HELPER
+-- toSample :
+--     { features : List { id : Int, title : String, state : String, areaPath : String, iterationPath : String, tags : List String }
+--     , stories : List { id : Int, title : String, state : String, areaPath : String, iterationPath : String, parentId : Int }
+--     }
+--     -> Ado.Sample
+-- toSample payload =
+--     { features =
+--         List.map
+--             (\f -> { id = f.id, title = f.title, iterationPath = f.iterationPath, areaPath = f.areaPath, state = f.state, tags = f.tags })
+--             payload.features
+--     , stories =
+--         List.map
+--             (\s -> { id = s.id, title = s.title, parentId = s.parentId, iterationPath = s.iterationPath, state = s.state, areaPath = s.areaPath })
+--             payload.stories
+--     }
 -- VIEW
 
 

@@ -1,5 +1,7 @@
 // src/ts/content/fetch/areas.ts
 
+import { adoJson } from "./http";
+
 type AdoClassificationNode = {
 	name: string;
 	path: string;                 // e.g. "\\Contoso\\ART"
@@ -8,18 +10,6 @@ type AdoClassificationNode = {
 
 const API_VER = '7.1-preview.2'; // stable for classification nodes
 
-async function adoJson<T>(url: string): Promise<T> {
-	const res = await fetch(url, {
-		method: 'GET',
-		credentials: 'include', // use ADO auth cookie
-		headers: { 'Accept': 'application/json' }
-	});
-	if (!res.ok) {
-		const text = await res.text();
-		throw new Error(`[ADO] ${res.status} ${res.statusText}: ${text}`);
-	}
-	return res.json() as Promise<T>;
-}
 
 /**
  * Returns the top-level Area children (ART roots).

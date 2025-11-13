@@ -1,49 +1,108 @@
 // src/ts/resources/overlay.ts
-import { SP_REQ_ITERATIONS, SP_ITERATIONS, SP_REQ_AREAS, SP_AREAS } from '../shared/messages';
+import {
+	SP_REQ_ITERATIONS, // SP_ITERATIONS,
+	SP_REQ_AREAS, SP_AREAS,
+	SP_PING, SP_PONG,
+	SP_PI_META,
+	SP_REQ_DATA, SP_DATA,
+} from '../shared/messages';
 
+/** Wire Elm ports for iterations + areas and general message bridge */
+function wireElm(app: any) {
+	// Log vilka portar Elm faktiskt exponerar (bra felsökning)
+	const ports = app?.ports ? Object.keys(app.ports) : [];
+	console.log('[SP][overlay] Elm ports:', ports);
 
-function wireElmIterationPorts(app: any) {
+	// ---- Elm -> overlay: begär iterationer ----
 	if (app?.ports?.requestIterations) {
 		app.ports.requestIterations.subscribe(() => {
-			console.log('[SP][overlay] Elm requested iterations → posting', SP_REQ_ITERATIONS);
+			console.log('[SP][overlay] Elm requested iterations → post', SP_REQ_ITERATIONS);
 			window.parent.postMessage({ type: SP_REQ_ITERATIONS }, '*');
 		});
+	} else {
+		console.warn('[SP][overlay] port requestIterations missing');
 	}
 
-	window.addEventListener('message', (ev) => {
-		const msg = ev.data;
-		if (msg && msg.type === SP_ITERATIONS && Array.isArray(msg.piRoots)) {
-			console.log('[SP][overlay] got', SP_ITERATIONS, '→ forwarding to Elm', msg.piRoots);
-			app?.ports?.receiveIterations?.send(msg.piRoots);
-		}
-	});
-}
-
-function wireElmAreaPorts(app: any) {
+	// ---- Elm -> overlay: begär areas ----
 	if (app?.ports?.requestAreas) {
 		app.ports.requestAreas.subscribe(() => {
-			console.log('[SP][overlay] Elm requested areas → posting', SP_REQ_AREAS);
+			console.log('[SP][overlay] Elm requested areas → post', SP_REQ_AREAS);
 			window.parent.postMessage({ type: SP_REQ_AREAS }, '*');
 		});
+	} else {
+		console.warn('[SP][overlay] port requestAreas missing');
 	}
 
-	window.addEventListener('message', (ev) => {
+	// Elm -> request data (area+pi)
+	if (app?.ports?.requestData) {
+		app.ports.requestData.subscribe((payload: { area: string; pi: string }) => {
+			console.log('[SP][overlay] Elm requestData →', payload);
+			window.parent.postMessage({ type: SP_REQ_DATA, areaRoot: payload.area, piRoot: payload.pi }, '*');
+		});
+	} else {
+		console.warn('[SP][overlay] port requestData missing');
+	}
+
+	// ---- overlay ← content: en enda message-listener för allt ----
+	const onMessage = (ev: MessageEvent) => {
 		const msg = ev.data;
-		if (msg && msg.type === SP_AREAS && Array.isArray(msg.areas)) {
-			console.log('[SP][overlay] got', SP_AREAS, '→ forwarding to Elm', msg.areas);
-			// msg.areas ska vara [{ id, name }, ...]
-			app?.ports?.receiveAreas?.send(msg.areas);
+		if (!msg || typeof msg !== 'object') return;
+
+		switch (msg.type) {
+			// case SP_ITERATIONS: {
+			// 	if (Array.isArray(msg.piRoots)) {
+			// 		console.log('[SP][overlay] got', SP_ITERATIONS, '→ forward to Elm', msg.piRoots);
+			// 		app?.ports?.receiveIterations?.send(msg.piRoots);
+			// 	}
+			// 	break;
+			// }
+
+			case SP_AREAS: {
+				// Förväntat: { areas: Array<{ id: string, name: string }> }
+				if (Array.isArray(msg.areas)) {
+					console.log('[SP][overlay] got', SP_AREAS, '→ forward to Elm', msg.areas);
+					app?.ports?.receiveAreas?.send(msg.areas);
+				}
+				break;
+			}
+
+			case SP_PONG: {
+				console.log('[SP][overlay] got PONG from content/page');
+				break;
+			}
+
+			case SP_PI_META: {
+				if (Array.isArray(msg.meta)) {
+					app?.ports?.receivePiMeta?.send(msg.meta);
+				}
+				break;
+			}
+
+			case SP_DATA: {
+				if (msg.payload && app?.ports?.receiveData) {
+					console.log('[SP][overlay] got SP_DATA → forward to Elm', { f: msg.payload.features?.length ?? 0, s: msg.payload.stories?.length ?? 0 });
+					app.ports.receiveData.send(msg.payload);
+				}
+				break;
+			}
+			// (ev. fler typer senare)
 		}
-	});
+	};
+
+	window.addEventListener('message', onMessage);
+
+	// Skicka en PING kort efter start (ADO-sidan pingar också tillbaka)
+	setTimeout(() => {
+		console.log('[SP][overlay] sending PING to parent');
+		window.parent.postMessage({ type: SP_PING }, '*');
+	}, 400);
 }
 
-
-
-// Boot Elm after #app exists
+/** Starta Elm när #app finns */
 function bootElm() {
 	const node = document.getElementById('app');
 	if (!node) {
-		console.error('[SP][Overlay] #app not found in overlay.html');
+		console.error('[SP][overlay] #app not found in overlay.html');
 		return;
 	}
 
@@ -51,68 +110,29 @@ function bootElm() {
 		const E = (window as any).Elm;
 		if (!E) {
 			if (attempt < 100) return setTimeout(() => tryStart(attempt + 1), 20);
-			console.error('[SP][Overlay] Elm global missing after wait');
+			console.error('[SP][overlay] Elm global missing after wait');
 			return;
 		}
 		const mod = E.App;
 		if (!mod) {
-			console.error('[SP][Overlay] Elm exists but Elm.App missing. Elm keys:', Object.keys(E));
+			console.error('[SP][overlay] Elm exists but Elm.App missing. Elm keys:', Object.keys(E));
 			return;
 		}
 		try {
 			const app = mod.init({ node });
 			console.log('[SP] Elm.App init OK');
-			wireElmIterationPorts(app);
-			wireElmAreaPorts(app);
+			wireElm(app);
 		} catch (err) {
-			console.error('[SP][Overlay] Elm.App.init error:', err);
+			console.error('[SP][overlay] Elm.App.init error:', err);
 		}
 	}
 
 	tryStart();
 }
 
-function attachMessageBridge() {
-	console.debug('[SP][Overlay] message bridge attached');
-	window.addEventListener('message', (ev: MessageEvent) => {
-		const msg = ev.data;
-		if (!msg || typeof msg !== 'object') return;
-
-		if (msg.type === 'PING' && msg.from === 'ado') {
-			console.debug('[SP][Overlay] got PING, sending PONG');
-			window.parent.postMessage({ type: 'PONG', from: 'overlay' }, '*');
-		}
-	});
-}
-
-// Run
+// Run once DOM is ready
 if (document.readyState === 'loading') {
-	document.addEventListener('DOMContentLoaded', () => {
-		bootElm();
-		attachMessageBridge();
-	});
+	document.addEventListener('DOMContentLoaded', bootElm);
 } else {
 	bootElm();
-	attachMessageBridge();
 }
-
-
-
-
-import { SP_PING, SP_PONG } from '../shared/messages';
-
-function log(...args: unknown[]) { console.log('[SP][overlay]', ...args); }
-
-window.addEventListener('message', (ev: MessageEvent) => {
-	const msg = ev.data;
-	if (!msg || typeof msg !== 'object') return;
-	if (msg.type === SP_PONG) log('got PONG from content/page');
-});
-
-// Send one PING shortly after Elm starts
-setTimeout(() => {
-	log('sending PING to parent');
-	window.parent.postMessage({ type: SP_PING }, '*');
-}, 500);
-
-

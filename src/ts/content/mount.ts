@@ -1,26 +1,28 @@
-// src/ts/ado/mount.ts
-import { OverlayMessage, ParentMessage } from '../shared/messages';
+// src/ts/content/mount.ts
+import { SP_PING, SP_PONG } from '../shared/messages';
 
 const OVERLAY_ID = 'sp-overlay-root';
 const IFRAME_ID = 'sp-overlay-iframe';
 
-console.debug('[SP][ADO] mount loaded');  // add at top of file
+let pongListener: ((ev: MessageEvent) => void) | null = null;
 
 export function openOverlay() {
 	if (document.getElementById(OVERLAY_ID)) return;
 
+	// Backdrop
 	const mask = document.createElement('div');
 	mask.id = OVERLAY_ID;
 	Object.assign(mask.style, {
 		position: 'fixed',
 		inset: '0',
 		zIndex: '999999',
-		background: 'var(--sp-backdrop, rgba(15,23,42,0.55))'
+		background: 'var(--sp-backdrop, rgba(15,23,42,0.55))',
 	});
 	mask.addEventListener('click', (e) => {
 		if (e.target === mask) closeOverlay();
 	});
 
+	// iFrame
 	const frame = document.createElement('iframe');
 	frame.id = IFRAME_ID;
 	Object.assign(frame.style, {
@@ -34,52 +36,62 @@ export function openOverlay() {
 		border: '0',
 		borderRadius: '16px',
 		boxShadow: '0 25px 80px rgba(0,0,0,0.35)',
-		background: 'white'
+		background: 'white',
 	});
 	frame.src = chrome.runtime.getURL('overlay.html');
 
 	mask.appendChild(frame);
 	document.body.appendChild(mask);
 
-	// robust PING loop
+	// PING loop until we get PONG
 	let gotPong = false;
 	let tries = 0;
 	const maxTries = 20;
 	const intervalMs = 250;
+	let pingTimer: number | null = null;
 
 	const sendPing = () => {
 		const win = frame.contentWindow;
 		if (!win) return;
-		const msg: OverlayMessage = { type: 'PING', from: 'ado' };
 		try {
-			win.postMessage(msg, '*');
+			win.postMessage({ type: SP_PING }, '*');
 			console.debug('[SP][ADO] sent PING to overlay');
 		} catch (e) {
 			console.warn('[SP][ADO] postMessage failed', e);
 		}
 	};
 
-	// fire on load + keep pinging until PONG
 	frame.addEventListener('load', () => {
 		sendPing();
-		const id = setInterval(() => {
-			if (gotPong || tries++ >= maxTries) return clearInterval(id);
+		pingTimer = window.setInterval(() => {
+			if (gotPong || tries++ >= maxTries) {
+				if (pingTimer) window.clearInterval(pingTimer);
+				pingTimer = null;
+				return;
+			}
 			sendPing();
 		}, intervalMs);
 	});
 
-	// listen for PONG
-	const onMessage = (ev: MessageEvent<ParentMessage>) => {
-		if (!ev || !ev.data) return;
-		if (ev.data.type === 'PONG') {
+	pongListener = (ev: MessageEvent) => {
+		const data = ev.data;
+		if (!data || typeof data !== 'object') return;
+		if (data.type === SP_PONG) {
 			gotPong = true;
+			if (pingTimer) window.clearInterval(pingTimer);
+			pingTimer = null;
 			console.debug('[SP][ADO] got PONG from overlay');
-			// keep listener for later messages (iterations, etc.)
+			// keep listener for later messages if needed
 		}
 	};
-	window.addEventListener('message', onMessage);
+
+	window.addEventListener('message', pongListener);
 }
 
 export function closeOverlay() {
+	if (pongListener) {
+		window.removeEventListener('message', pongListener);
+		pongListener = null;
+	}
 	document.getElementById(OVERLAY_ID)?.remove();
 }
