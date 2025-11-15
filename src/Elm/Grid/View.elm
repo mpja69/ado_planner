@@ -99,7 +99,7 @@ headerRow unscheduled n =
     in
     div [ A.class "contents" ]
         ((if unscheduled then
-            headCell "Unscheduled"
+            headCell "Not in a Sprint in this PI"
 
           else
             mutedCell

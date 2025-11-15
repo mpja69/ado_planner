@@ -2,6 +2,7 @@ module Filters.Types exposing
     ( Model
     , Options
     , Selection
+    , TagMode(..)
     , UIState
     , allTagsL
     , areaL
@@ -13,9 +14,11 @@ module Filters.Types exposing
     , optionsL
     , readyToFetch
     , selectionL
+    , tagModeL
     , tagQueryL
     , tagsEnabled
     , tagsOpenL
+    , teamL
     , uiStateL
     )
 
@@ -34,10 +37,17 @@ type alias Options =
     }
 
 
+type TagMode
+    = TagAnd
+    | TagOr
+
+
 type alias Selection =
     { area : Maybe String
     , iteration : Maybe String
     , includeTags : Set String
+    , team : Maybe String
+    , tagMode : TagMode
     }
 
 
@@ -64,7 +74,7 @@ type alias Model =
 init : Model
 init =
     { options = { iterations = [] }
-    , sel = { area = Nothing, iteration = Nothing, includeTags = Set.empty }
+    , sel = { area = Nothing, iteration = Nothing, includeTags = Set.empty, team = Nothing, tagMode = TagAnd }
     , isOpen = True
     , allTags = []
     , ui = { tagsOpen = False, tagQuery = "" }
@@ -75,7 +85,7 @@ init =
 initWith : { areas : List AS.AreaMini, iterations : List String, favorites : List String } -> Model
 initWith cfg =
     { options = { iterations = cfg.iterations }
-    , sel = { area = Nothing, iteration = Nothing, includeTags = Set.empty }
+    , sel = { area = Nothing, iteration = Nothing, includeTags = Set.empty, team = Nothing, tagMode = TagAnd }
     , isOpen = True
     , allTags = []
     , ui = { tagsOpen = False, tagQuery = "" }
@@ -151,6 +161,20 @@ iterationL : Lens Selection (Maybe String)
 iterationL =
     { get = .iteration
     , set = \v s -> { s | iteration = v }
+    }
+
+
+teamL : Lens Selection (Maybe String)
+teamL =
+    { get = .team
+    , set = \v s -> { s | team = v }
+    }
+
+
+tagModeL : Lens Selection TagMode
+tagModeL =
+    { get = .tagMode
+    , set = \v s -> { s | tagMode = v }
     }
 
 

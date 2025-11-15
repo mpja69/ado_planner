@@ -265,23 +265,6 @@ update msg model =
             in
             ( { model | filters = filters2 }, Cmd.none )
 
-        -- GotIterations piRoots ->
-        --     -- Just store the two PI roots in the filter options.
-        --     -- (No auto-select; the user still clicks the 2-pill picker.)
-        --     let
-        --         opts1 =
-        --             model.filters.options
-        --
-        --         opts2 =
-        --             { opts1 | iterations = piRoots }
-        --
-        --         filters1 =
-        --             model.filters
-        --
-        --         filters2 =
-        --             { filters1 | options = opts2 }
-        --     in
-        --     ( { model | filters = filters2 }, Cmd.none )
         Grid gm ->
             let
                 -- convert App.Model -> Grid.Model, then back by copying fields
@@ -321,31 +304,6 @@ update msg model =
             in
             ( { model | filters = filters2 }, cmdFetch )
 
-        -- Filters fmsg ->
-        --     let
-        --         filters2 =
-        --             FU.update fmsg model.filters
-        --
-        --         newIntents =
-        --             case ( filters2.sel.area, filters2.sel.iteration ) of
-        --                 ( Just art, Just pi ) ->
-        --                     if List.isEmpty model.rows then
-        --                         [ FetchFeatures { artAreaPath = art, piRoot = pi } ]
-        --
-        --                     else
-        --                         []
-        --
-        --                 _ ->
-        --                     []
-        --
-        --         model2 =
-        --             { model
-        --                 | filters = filters2
-        --                 , outbox = model.outbox ++ newIntents
-        --             }
-        --                 |> runIntents
-        --     in
-        --     ( model2, Cmd.none )
         GotPiMeta rows ->
             let
                 -- build Dict root -> sprintCount
@@ -481,21 +439,41 @@ update msg model =
 
 
 -- HELPER
--- toSample :
---     { features : List { id : Int, title : String, state : String, areaPath : String, iterationPath : String, tags : List String }
---     , stories : List { id : Int, title : String, state : String, areaPath : String, iterationPath : String, parentId : Int }
---     }
---     -> Ado.Sample
--- toSample payload =
---     { features =
---         List.map
---             (\f -> { id = f.id, title = f.title, iterationPath = f.iterationPath, areaPath = f.areaPath, state = f.state, tags = f.tags })
---             payload.features
---     , stories =
---         List.map
---             (\s -> { id = s.id, title = s.title, parentId = s.parentId, iterationPath = s.iterationPath, state = s.state, areaPath = s.areaPath })
---             payload.stories
---     }
+
+
+filterByTeam : Maybe String -> List Feature -> List Feature
+filterByTeam maybeTeam rows =
+    case maybeTeam of
+        Nothing ->
+            rows
+
+        Just teamTag ->
+            List.filter (\r -> List.member teamTag r.tags) rows
+
+
+filterByTags : FT.TagMode -> List String -> List Feature -> List Feature
+filterByTags mode tags rows =
+    case tags of
+        [] ->
+            rows
+
+        sel ->
+            let
+                hasAll row =
+                    List.all (\t -> List.member t row.tags) sel
+
+                hasAny row =
+                    List.any (\t -> List.member t row.tags) sel
+            in
+            case mode of
+                FT.TagAnd ->
+                    List.filter hasAll rows
+
+                FT.TagOr ->
+                    List.filter hasAny rows
+
+
+
 -- VIEW
 
 
@@ -515,22 +493,23 @@ view model =
         toggles =
             { showTests = model.config.tags.enableTests }
 
+        selectedTeam : Maybe String
+        selectedTeam =
+            model.filters.sel.team
+
         selectedTags : List String
         selectedTags =
             model.filters.sel.includeTags |> Set.toList
 
+        tagMode : FT.TagMode
+        tagMode =
+            model.filters.sel.tagMode
+
         rowsFiltered : List Feature
         rowsFiltered =
-            case selectedTags of
-                [] ->
-                    model.rows
-
-                _ ->
-                    let
-                        hasAll sel r =
-                            List.all (\t -> List.member t r.tags) sel
-                    in
-                    List.filter (hasAll selectedTags) model.rows
+            model.rows
+                |> filterByTeam selectedTeam
+                |> filterByTags tagMode selectedTags
 
         gridModel =
             model
@@ -547,7 +526,7 @@ view model =
     in
     div [ A.class ("w-full h-screen p-6" ++ GV.appBgColor) ]
         [ div [ A.class "text-2xl font-bold" ] [ text "Sprint Planner" ]
-        , FV.view model.config (not (List.isEmpty model.rows)) model.filters |> Html.map Filters
+        , FV.view model.config model.filters |> Html.map Filters
         , if List.isEmpty rowsFiltered then
             noRowsMsg
 

@@ -3,7 +3,7 @@ module Config exposing
     , Config
     , TagPolicy
     , default
-    , isTeamTag
+      -- , isTeamTag
       -- , isTestTag
     , tagVisibleForChooser
     )
@@ -40,8 +40,8 @@ default =
     , tags =
         { enableTests = True
         , testTags = { sit = "SIT", uat = "UAT", e2e = "E2E" }
-        , enableTeamTags = False
-        , teamTags = Set.empty
+        , enableTeamTags = True
+        , teamTags = Set.fromList [ "TeamAccount", "TeamAssort", "TeamPortal" ]
         }
     }
 
@@ -51,14 +51,9 @@ default =
 -- isTestTag : TagPolicy -> String -> Bool
 -- isTestTag tp t =
 --     tp.enableTests && Set.member t tp.testTags
-
-
-isTeamTag : TagPolicy -> String -> Bool
-isTeamTag tp t =
-    tp.enableTeamTags && Set.member t tp.teamTags
-
-
-
+-- isTeamTag : TagPolicy -> String -> Bool
+-- isTeamTag tp t =
+--     tp.enableTeamTags && Set.member t tp.teamTags
 -- Används när vi bygger listan av valbara taggar i filterpanelen
 -- wherever you filter visible tags
 
@@ -72,5 +67,24 @@ tagVisibleForChooser tp tag =
         isTestTag =
             List.member (up tag)
                 [ up tp.testTags.sit, up tp.testTags.uat, up tp.testTags.e2e ]
+
+        isTeamTag =
+            Set.member tag tp.teamTags
     in
-    not (tp.enableTests && isTestTag)
+    -- not (tp.enableTests && isTestTag)
+    case ( tp.enableTests, tp.enableTeamTags ) of
+        -- 1) Inga filter på: visa alla taggar
+        ( False, False ) ->
+            True
+
+        -- 2) Bara test-taggar
+        ( True, False ) ->
+            not isTestTag
+
+        -- 3) Bara team-taggar
+        ( False, True ) ->
+            not isTeamTag
+
+        -- 4) Både test + team
+        ( True, True ) ->
+            not isTestTag && not isTeamTag

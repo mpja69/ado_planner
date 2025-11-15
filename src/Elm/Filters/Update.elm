@@ -5,7 +5,7 @@ import Data.Filter as F
 import Filters.AreaSelector as AS
 import Filters.Logic as FL
 import Filters.Msg as FM
-import Filters.Types as FT exposing (allTagsL, areaL, includeTagsL, iterationL, iterationsL, optionsL, selectionL, tagQueryL, uiStateL)
+import Filters.Types as FT exposing (allTagsL, areaL, includeTagsL, iterationL, iterationsL, optionsL, selectionL, tagModeL, tagQueryL, teamL, uiStateL)
 import Lens exposing (compose, set)
 import Set
 
@@ -15,6 +15,21 @@ update msg model =
     case msg of
         FM.ToggleOpen ->
             { model | isOpen = not model.isOpen }
+
+        FM.SetTeam maybeTeam ->
+            model
+                |> set (compose selectionL teamL) maybeTeam
+
+        FM.ToggleTagsOpen ->
+            let
+                ui1 =
+                    model.ui
+            in
+            { model | ui = { ui1 | tagsOpen = not ui1.tagsOpen } }
+
+        FM.SetTagMode mode ->
+            model
+                |> set (compose selectionL tagModeL) mode
 
         FM.AreaSel asMsg ->
             let
@@ -37,26 +52,8 @@ update msg model =
 
         FM.SetIteration piRoot ->
             model
-                |> set (compose selectionL iterationL) (Just piRoot)        
-        -- FM.SetIteration piRoot ->
-        --     let
-        --         model1 =
-        --             model
-        --                 |> set (compose selectionL iterationL) (Just piRoot)
-        --
-        --         newTags =
-        --             FL.deriveTagsFromADO
-        --                 { area = model1.sel.area, iteration = model1.sel.iteration }
-        --                 Ado.sample
-        --
-        --         keepSet =
-        --             Set.intersect model1.sel.includeTags (Set.fromList newTags)
-        --     in
-        --     model1
-        --         |> set (compose selectionL includeTagsL) keepSet
-        --         |> set allTagsL newTags
+                |> set (compose selectionL iterationL) (Just piRoot)
 
-        -- Toggle i includeTags
         FM.ToggleTag tag ->
             let
                 newSet =

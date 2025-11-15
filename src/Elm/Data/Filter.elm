@@ -71,11 +71,6 @@ deriveProjectPiRoots s =
         |> List.sort
 
 
-
--- project\PI X   (vi plockar projekt från areaRoot)
--- FIX: Ska denna uppdateras också?!?!?
-
-
 derivePiRootsForArea : String -> Ado.Sample -> List String
 derivePiRootsForArea areaRoot sample =
     let
@@ -209,6 +204,7 @@ deriveSprintNamesFromSample piRoot sample =
                 if List.isEmpty names then
                     -- fallback (dev only)
                     [ "PI 1 Sprint 1", "PI 1 Sprint 2", "PI 1 Sprint 3", "PI 1 Sprint 4" ]
+
                 else
                     names
            )

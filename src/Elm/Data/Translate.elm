@@ -121,7 +121,7 @@ translate cfg ctx sample =
             , closedDate = Nothing
             , tests = deriveTests cfg.tags f.tags -- THIS NEW INSTEAD OF THE ONE BELOW
             , stories = storiesByFeature f.id |> List.map toStory
-            , tags = List.filter (Config.tagVisibleForChooser cfg.tags) f.tags
+            , tags = f.tags -- List.filter (Config.tagVisibleForChooser cfg.tags) f.tags
             }
     in
     List.map toRow sample.features
