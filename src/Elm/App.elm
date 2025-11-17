@@ -19,6 +19,10 @@ import Html exposing (Html, div, text)
 import Html.Attributes as A
 import Lens
 import Set
+import Settings.Msg as SM
+import Settings.Types as ST
+import Settings.Update as SU
+import Settings.View as SV
 import Status exposing (..)
 import Types exposing (..)
 import Ui.Rails exposing (..)
@@ -78,6 +82,7 @@ type alias Model =
     , pi : T.PiContext
     , outbox : List AdoCmd
     , filters : FT.Model
+    , settings : ST.Model
     , config : Config.Config
     , piSprintNames : Dict String (List String)
     }
@@ -90,12 +95,16 @@ type alias Model =
 init : () -> ( Model, Cmd Msg )
 init _ =
     let
+        cfg =
+            Config.default
+
         model =
             { grid = GT.empty
             , pi = T.emptyPi
             , outbox = []
             , filters = FT.init
-            , config = Config.default
+            , config = cfg
+            , settings = ST.fromConfig cfg
             , piSprintNames = Dict.empty
             }
     in
@@ -123,6 +132,7 @@ subscriptions _ =
 type Msg
     = Grid GM.Msg
     | Filters FM.Msg
+    | SettingsMsg SM.Msg
     | GotAreas (List { id : String, name : String })
     | GotPiMeta (List { root : String, sprintNames : List String })
     | GotData { features : List Ado.AdoFeature, stories : List Ado.AdoStory }
@@ -139,6 +149,18 @@ update msg model =
     case msg of
         NoOp ->
             ( model, Cmd.none )
+
+        SettingsMsg smsg ->
+            let
+                ( settings2, cfgPatch ) =
+                    SU.update smsg model.settings
+
+                config2 =
+                    cfgPatch model.config
+            in
+            ( { model | settings = settings2, config = config2 }
+            , Cmd.none
+            )
 
         GotAreaFavorites favIds ->
             let
@@ -456,6 +478,7 @@ view model =
     in
     div [ A.class ("w-full h-screen p-6" ++ GV.appBgColor) ]
         [ div [ A.class "text-2xl font-bold" ] [ text "Sprint Planner" ]
+        , SV.view model.settings |> Html.map SettingsMsg
         , FV.view model.config model.filters |> Html.map Filters
         , if List.isEmpty rowsFiltered then
             noRowsMsg
