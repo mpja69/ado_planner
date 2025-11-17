@@ -13,4 +13,5 @@ type Msg
     | StoryDragEnd
     | HoverStory (Maybe Int)
     | StoryDrop Int
+    | ToggleUnscheduled
     | NoOp

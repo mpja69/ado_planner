@@ -12,6 +12,9 @@ update msg model =
         GM.NoOp ->
             ( model, [] )
 
+        GM.ToggleUnscheduled ->
+            ( { model | showUnscheduled = not model.showUnscheduled }, [] )
+
         GM.DeliveryDragStart fid ->
             ( { model | draggingDelivery = Just fid, hoverDeliverySprint = Nothing }, [] )
 

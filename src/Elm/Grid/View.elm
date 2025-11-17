@@ -1,15 +1,17 @@
 module Grid.View exposing (appBgColor, view)
 
-import Components.Rails exposing (..)
 import Grid.Logic as GL
 import Grid.Msg as GM
 import Grid.Types as GT
-import Html exposing (Html, div, span, text)
+import Html exposing (Html, button, div, span, text)
 import Html.Attributes as A
-import Html.Events
+import Html.Events as E
 import Json.Decode
+import Svg.Attributes
 import Types exposing (..)
-import Ui exposing (..)
+import Ui.Icons as Icons
+import Ui.Rails exposing (..)
+import Ui.Theme exposing (..)
 
 
 type alias Toggles =
@@ -64,11 +66,11 @@ maybe cond node =
 view : Toggles -> GT.Model -> Html GM.Msg
 view toggles model =
     let
-        unscheduled =
+        hasUnscheduled =
             GL.hasUnscheduledItems model.rows
 
         leftColWidth =
-            if unscheduled then
+            if hasUnscheduled then
                 "220px"
 
             else
@@ -82,28 +84,50 @@ view toggles model =
         , A.style "grid-template-columns" templateCols
         , A.class ("gap-2" ++ gridBgColor)
         ]
-        (headerRow unscheduled model.sprintCount
+        (headerRow hasUnscheduled model.showUnscheduled model.sprintCount
             :: List.concatMap (featureRowView toggles model) model.rows
         )
 
 
-headerRow : Bool -> Int -> Html GM.Msg
-headerRow unscheduled n =
+headerRow : Bool -> Bool -> Int -> Html GM.Msg
+headerRow hasUnscheduled showUnscheduled n =
     let
         headCell s =
             div [ A.class "text-xs font-semibold uppercase tracking-wide text-slate-600 px-2 py-1" ] [ text s ]
 
         mutedCell =
-            -- empty/transparent cell so the grid stays aligned
             div [ A.class "px-0 py-0" ] []
+
+        unscheduledHeader : Html GM.Msg
+        unscheduledHeader =
+            if not hasUnscheduled then
+                mutedCell
+
+            else
+                div
+                    [ A.class "flex items-center gap-2 px-2 py-1 text-xs font-semibold uppercase tracking-wide text-slate-600" ]
+                    [ text "Not in a Sprint in this PI"
+                    , button
+                        [ A.type_ "button"
+                        , A.class "inline-flex items-center justify-center w-5 h-5 rounded hover:bg-slate-200"
+                        , E.onClick GM.ToggleUnscheduled
+                        ]
+                        [ Icons.chevronDown
+                            [ Svg.Attributes.class
+                                ("w-3 h-3 transition-transform "
+                                    ++ (if showUnscheduled then
+                                            "rotate-0"
+
+                                        else
+                                            "-rotate-90"
+                                       )
+                                )
+                            ]
+                        ]
+                    ]
     in
     div [ A.class "contents" ]
-        ((if unscheduled then
-            headCell "Not in a Sprint in this PI"
-
-          else
-            mutedCell
-         )
+        (unscheduledHeader
             :: List.map (\i -> headCell ("Sprint " ++ String.fromInt i)) (List.range 1 n)
         )
 
@@ -188,7 +212,7 @@ featureRowView toggles model row =
             List.map (\ix -> sprintCell toggles model row ix)
                 (List.range 1 model.sprintCount)
     in
-    (if isUnscheduledItems then
+    (if isUnscheduledItems && model.showUnscheduled then
         fullFeatureCell
 
      else
@@ -308,10 +332,10 @@ sprintCell toggles model row ix =
         storyHandlers : List (Html.Attribute GM.Msg)
         storyHandlers =
             if validStoryTarget then
-                [ Html.Events.on "dragenter" (Json.Decode.succeed (GM.HoverStory (Just ix)))
-                , Html.Events.preventDefaultOn "dragover" (Json.Decode.succeed ( GM.HoverStory (Just ix), True ))
-                , Html.Events.on "dragleave" (Json.Decode.succeed (GM.HoverStory Nothing))
-                , Html.Events.on "drop" (Json.Decode.succeed (GM.StoryDrop ix))
+                [ E.on "dragenter" (Json.Decode.succeed (GM.HoverStory (Just ix)))
+                , E.preventDefaultOn "dragover" (Json.Decode.succeed ( GM.HoverStory (Just ix), True ))
+                , E.on "dragleave" (Json.Decode.succeed (GM.HoverStory Nothing))
+                , E.on "drop" (Json.Decode.succeed (GM.StoryDrop ix))
                 ]
 
             else
@@ -320,10 +344,10 @@ sprintCell toggles model row ix =
         deliveryHandlers : List (Html.Attribute GM.Msg)
         deliveryHandlers =
             if validDeliveryTarget then
-                [ Html.Events.on "dragenter" (Json.Decode.succeed (GM.HoverDelivery (Just ix)))
-                , Html.Events.preventDefaultOn "dragover" (Json.Decode.succeed ( GM.HoverDelivery (Just ix), True ))
-                , Html.Events.on "dragleave" (Json.Decode.succeed (GM.HoverDelivery Nothing))
-                , Html.Events.on "drop" (Json.Decode.succeed (GM.DeliveryDrop ix))
+                [ E.on "dragenter" (Json.Decode.succeed (GM.HoverDelivery (Just ix)))
+                , E.preventDefaultOn "dragover" (Json.Decode.succeed ( GM.HoverDelivery (Just ix), True ))
+                , E.on "dragleave" (Json.Decode.succeed (GM.HoverDelivery Nothing))
+                , E.on "drop" (Json.Decode.succeed (GM.DeliveryDrop ix))
                 ]
 
             else
@@ -398,8 +422,8 @@ storyCard isGhost can s =
                 [ A.attribute "draggable" "true"
                 , A.attribute "ondragstart" "event.dataTransfer.effectAllowed='move'; event.dataTransfer.dropEffect='move'"
                 , A.attribute "ondragover" "event.preventDefault(); event.dataTransfer.dropEffect='move'"
-                , Html.Events.on "dragstart" (Json.Decode.succeed (GM.StoryDragStart s.id))
-                , Html.Events.on "dragend" (Json.Decode.succeed GM.StoryDragEnd)
+                , E.on "dragstart" (Json.Decode.succeed (GM.StoryDragStart s.id))
+                , E.on "dragend" (Json.Decode.succeed GM.StoryDragEnd)
                 ]
 
             else
@@ -445,8 +469,8 @@ featureCard toggles isGhost warnKind can row =
                 [ A.attribute "draggable" "true"
                 , A.attribute "ondragstart" "event.dataTransfer.effectAllowed='move'; event.dataTransfer.dropEffect='move'"
                 , A.attribute "ondragover" "event.preventDefault(); event.dataTransfer.dropEffect='move'"
-                , Html.Events.on "dragstart" (Json.Decode.succeed (GM.DeliveryDragStart row.featureId))
-                , Html.Events.on "dragend" (Json.Decode.succeed GM.DeliveryDragEnd)
+                , E.on "dragstart" (Json.Decode.succeed (GM.DeliveryDragStart row.featureId))
+                , E.on "dragend" (Json.Decode.succeed GM.DeliveryDragEnd)
                 ]
 
             else
@@ -499,7 +523,7 @@ testStrip can featureId tests =
                 { label = label, active = active }
                 -- HACK: Do not update tests
                 (if False then
-                    [ Html.Events.onClick (GM.ToggleTest featureId kind) ]
+                    [ E.onClick (GM.ToggleTest featureId kind) ]
 
                  else
                     []

@@ -1,10 +1,10 @@
-module Components.Rails exposing (..)
+module Ui.Rails exposing (..)
 
 import Html exposing (Html, div)
 import Html.Attributes as A
 import Svg exposing (Svg, svg)
 import Svg.Attributes as SA
-import Ui exposing (UiSize(..))
+import Ui.Theme exposing (UiSize(..))
 
 
 type PatternMode

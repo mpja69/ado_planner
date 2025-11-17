@@ -1,7 +1,6 @@
 port module App exposing (main)
 
 import Browser
-import Components.Rails exposing (..)
 import Config
 import Data.Ado as Ado
 import Data.Filter as F
@@ -22,7 +21,8 @@ import Lens
 import Set
 import Status exposing (..)
 import Types exposing (..)
-import Ui exposing (UiSize(..))
+import Ui.Rails exposing (..)
+import Ui.Theme exposing (UiSize(..))
 
 
 
@@ -74,12 +74,7 @@ port sendSetIteration : { id : Int, iterationPath : String } -> Cmd msg
 
 
 type alias Model =
-    { sprintCount : Int
-    , rows : List Feature
-    , draggingDelivery : Maybe Int
-    , hoverDeliverySprint : Maybe Int
-    , draggingStory : Maybe Int
-    , hoverStorySprint : Maybe Int
+    { grid : GT.Model
     , pi : T.PiContext
     , outbox : List AdoCmd
     , filters : FT.Model
@@ -96,12 +91,7 @@ init : () -> ( Model, Cmd Msg )
 init _ =
     let
         model =
-            { sprintCount = 0
-            , rows = []
-            , draggingDelivery = Nothing
-            , hoverDeliverySprint = Nothing
-            , draggingStory = Nothing
-            , hoverStorySprint = Nothing
+            { grid = GT.empty
             , pi = T.emptyPi
             , outbox = []
             , filters = FT.init
@@ -183,8 +173,6 @@ update msg model =
 
                 keepSel =
                     case ( model.filters.sel.area, chosen ) of
-                        -- AreaSelector själv returnerar chosen = Just id vid SelectArea.
-                        -- Här kommer ReplaceAreas, så chosen = Nothing. Vi bevarar befintligt val om det finns i listan.
                         ( Just old, _ ) ->
                             if List.any (\a -> a.id == old) miniAreas then
                                 Just old
@@ -213,17 +201,14 @@ update msg model =
             let
                 -- convert App.Model -> Grid.Model, then back by copying fields
                 ( g2, intents ) =
-                    GU.update gm (GT.fromApp model)
+                    GU.update gm model.grid
 
                 model2 =
                     { model
-                        | sprintCount = g2.sprintCount
-                        , rows = g2.rows
-                        , draggingDelivery = g2.draggingDelivery
-                        , hoverDeliverySprint = g2.hoverDeliverySprint
-                        , draggingStory = g2.draggingStory
-                        , hoverStorySprint = g2.hoverStorySprint
+                        | grid = g2
                         , outbox = []
+
+                        -- , outbox = intents ++ model.outbox
                     }
 
                 cmdUpdates =
@@ -256,11 +241,6 @@ update msg model =
                         (\r acc -> Dict.insert r.root r.sprintNames acc)
                         Dict.empty
                         rows
-
-                -- DEBUG: leave these while verifying
-                _ =
-                    Debug.log "GotPiMeta (sprintNames)"
-                        dictNames
 
                 -- the two PI roots we’ll show as pills
                 roots : List String
@@ -308,7 +288,7 @@ update msg model =
                     , stories = payload.stories
                     }
 
-                -- pick sprint count for the currently selected PI (fallback to 5)
+                -- CTX
                 piRoot =
                     Maybe.withDefault "" model.filters.sel.iteration
 
@@ -330,33 +310,20 @@ update msg model =
                 ctx =
                     T.buildPi piRoot sprintNames
 
-                -- DEBUG: leave these while verifying
-                _ =
-                    Debug.log "GotData counts (features,stories)"
-                        ( List.length payload.features, List.length payload.stories )
-
-                _ =
-                    case List.filter (\s -> s.parentId /= 0) payload.stories |> List.head of
-                        Just sNonZero ->
-                            Debug.log "First story with parentId /= 0 (title,id,parent)"
-                                ( sNonZero.title, sNonZero.id, sNonZero.parentId )
-
-                        Nothing ->
-                            Debug.log "No stories with parentId /= 0" ( "", 0, 0 )
-
-                _ =
-                    case payload.stories |> List.head of
-                        Just s ->
-                            Debug.log "First story (any) (title,id,parent)"
-                                ( s.title, s.id, s.parentId )
-
-                        Nothing ->
-                            Debug.log "First story (none)" ( "", 0, 0 )
-
+                -- GRID
                 rows2 =
                     T.translate model.config ctx sample
 
-                -- refresh tag list from the received data
+                grid1 =
+                    model.grid
+
+                grid2 =
+                    { grid1
+                        | rows = rows2
+                        , sprintCount = List.length sprintNames
+                    }
+
+                -- FILTERS
                 allTags =
                     F.deriveTagsFromSample model.config.tags sample
 
@@ -373,8 +340,7 @@ update msg model =
                         |> Lens.set (Lens.compose FT.selectionL FT.includeTagsL) keptSel
             in
             ( { model
-                | rows = rows2
-                , sprintCount = List.length sprintNames
+                | grid = grid2
                 , pi = ctx
                 , filters = filters2
               }
@@ -471,13 +437,13 @@ view model =
 
         rowsFiltered : List Feature
         rowsFiltered =
-            model.rows
+            model.grid.rows
                 |> filterByTeam selectedTeam
                 |> filterByTags tagMode selectedTags
 
+        gridModel : GT.Model
         gridModel =
-            model
-                |> GT.fromApp
+            model.grid
                 |> (\g -> { g | rows = rowsFiltered })
 
         noRowsMsg : Html msg

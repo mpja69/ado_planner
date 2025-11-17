@@ -1,4 +1,4 @@
-module Grid.Types exposing (Model, fromApp)
+module Grid.Types exposing (Model, empty)
 
 import Types exposing (Feature)
 
@@ -10,28 +10,17 @@ type alias Model =
     , hoverDeliverySprint : Maybe Int
     , draggingStory : Maybe Int
     , hoverStorySprint : Maybe Int
+    , showUnscheduled : Bool
     }
 
 
-
--- thin adapter to build Grid.Model from App.Model (you already have these fields)
-
-
-fromApp :
-    { a
-        | sprintCount : Int
-        , rows : List Feature
-        , draggingDelivery : Maybe Int
-        , hoverDeliverySprint : Maybe Int
-        , draggingStory : Maybe Int
-        , hoverStorySprint : Maybe Int
-    }
-    -> Model
-fromApp a =
-    { sprintCount = a.sprintCount
-    , rows = a.rows
-    , draggingDelivery = a.draggingDelivery
-    , hoverDeliverySprint = a.hoverDeliverySprint
-    , draggingStory = a.draggingStory
-    , hoverStorySprint = a.hoverStorySprint
+empty : Model
+empty =
+    { sprintCount = 0
+    , rows = []
+    , draggingDelivery = Nothing
+    , hoverDeliverySprint = Nothing
+    , draggingStory = Nothing
+    , hoverStorySprint = Nothing
+    , showUnscheduled = True
     }

@@ -14,6 +14,7 @@ import Html.Events as E
 import Set exposing (Set)
 import Svg exposing (Svg)
 import Svg.Attributes as Attr
+import Ui.Icons as I
 
 
 
@@ -193,7 +194,7 @@ renderItem favIds selectedId area =
         [ Html.div [ A.class "flex items-center justify-between" ]
             [ Html.span [ A.class "w-5 flex justify-left" ]
                 [ if selected then
-                    checkmarkIcon [ Attr.class "w-4 h-4" ]
+                    I.checkmark [ Attr.class "w-4 h-4" ]
 
                   else
                     Html.text ""
@@ -218,11 +219,11 @@ viewToggleButton selectedLabel isOpen =
                 "false"
             )
         ]
-        [ boardIcon []
+        [ I.board []
         , Html.span
             [ A.class "w-[200px] overflow-hidden text-ellipsis whitespace-nowrap text-left font-semibold text-xs" ]
             [ Html.text selectedLabel ]
-        , chevronDownIcon []
+        , I.chevronDown []
         ]
 
 
@@ -248,67 +249,3 @@ isSelected sel t =
 isFavorite : Set String -> AreaMini -> Bool
 isFavorite favIds area =
     Set.member area.id favIds
-
-
-
--- ICONS (reusing your shapes)
-
-
-chevronDownIcon : List (Svg.Attribute msg) -> Svg msg
-chevronDownIcon attrs =
-    Svg.svg
-        ([ Attr.viewBox "0 0 16 16"
-         , Attr.fill "none"
-         , Attr.stroke "currentColor"
-         , Attr.strokeWidth "1.5"
-         , Attr.class "w-4 h-4"
-         ]
-            ++ attrs
-        )
-        [ Svg.polyline
-            [ Attr.points "4,6 8,10 12,6"
-            , Attr.strokeLinecap "round"
-            , Attr.strokeLinejoin "round"
-            ]
-            []
-        ]
-
-
-boardIcon : List (Svg.Attribute msg) -> Svg msg
-boardIcon attrs =
-    Svg.svg
-        ([ Attr.viewBox "0 0 24 24"
-         , Attr.fill "none"
-         , Attr.stroke "currentColor"
-         , Attr.strokeWidth "1"
-         , Attr.class "w-4 h-4"
-         ]
-            ++ attrs
-        )
-        [ Svg.rect [ Attr.x "3", Attr.y "3", Attr.width "6", Attr.height "4", Attr.rx "1", Attr.fill "#666", Attr.stroke "#666" ] []
-        , Svg.line [ Attr.x1 "4", Attr.y1 "5", Attr.x2 "8", Attr.y2 "5", Attr.stroke "#fff" ] []
-        , Svg.rect [ Attr.x "3", Attr.y "9", Attr.width "6", Attr.height "4", Attr.rx "1", Attr.fill "#000" ] []
-        , Svg.line [ Attr.x1 "4", Attr.y1 "11", Attr.x2 "8", Attr.y2 "11", Attr.stroke "#fff" ] []
-        , Svg.rect [ Attr.x "3", Attr.y "15", Attr.width "6", Attr.height "4", Attr.rx "1", Attr.fill "#000" ] []
-        , Svg.line [ Attr.x1 "4", Attr.y1 "17", Attr.x2 "8", Attr.y2 "17", Attr.stroke "#fff" ] []
-        , Svg.rect [ Attr.x "11", Attr.y "3", Attr.width "6", Attr.height "4", Attr.rx "1", Attr.fill "#666", Attr.stroke "#666" ] []
-        , Svg.line [ Attr.x1 "12", Attr.y1 "5", Attr.x2 "16", Attr.y2 "5", Attr.stroke "#fff" ] []
-        , Svg.rect [ Attr.x "11", Attr.y "9", Attr.width "6", Attr.height "4", Attr.rx "1", Attr.fill "#666", Attr.stroke "#666" ] []
-        , Svg.line [ Attr.x1 "12", Attr.y1 "11", Attr.x2 "16", Attr.y2 "11", Attr.stroke "#fff" ] []
-        ]
-
-
-checkmarkIcon : List (Svg.Attribute msg) -> Svg msg
-checkmarkIcon attrs =
-    Svg.svg
-        ([ Attr.height "16"
-         , Attr.fill "none"
-         , Attr.stroke "gray"
-         , Attr.strokeWidth "2"
-         , Attr.strokeLinecap "round"
-         , Attr.strokeLinejoin "round"
-         , Attr.class "w-4 h-4"
-         ]
-            ++ attrs
-        )
-        [ Svg.path [ Attr.d "M3 8l3 3 7-7" ] [] ]

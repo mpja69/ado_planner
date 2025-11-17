@@ -1,4 +1,4 @@
-module Ui exposing
+module Ui.Theme exposing
     ( UiColor(..)
     , UiSize(..)
     , cardToneForStatus
