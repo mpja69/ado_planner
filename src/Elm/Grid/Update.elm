@@ -39,7 +39,7 @@ update msg model =
                             List.map up model.rows
 
                         intents =
-                            [ Types.SetFeatureIteration { featureId = fid, toSprintIx = newIx } ]
+                            [ Types.SetIteration { id = fid, toSprintIx = newIx } ]
                     in
                     ( { model
                         | rows = rows2
@@ -79,7 +79,7 @@ update msg model =
                             List.map upR model.rows
 
                         intents =
-                            [ Types.SetStoryIteration { storyId = sid, toSprintIx = newIx } ]
+                            [ Types.SetIteration { id = sid, toSprintIx = newIx } ]
                     in
                     ( { model
                         | rows = rows2

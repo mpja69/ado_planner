@@ -56,7 +56,6 @@ type alias Feature =
 
 
 type AdoCmd
-    = SetStoryIteration { storyId : Int, toSprintIx : Int }
-    | SetFeatureIteration { featureId : Int, toSprintIx : Int }
+    = SetIteration { id : Int, toSprintIx : Int }
     | SetFeatureTags { featureId : Int, sit : Bool, uat : Bool, e2e : Bool }
     | FetchFeatures { artAreaPath : String, piRoot : String } -- NEW

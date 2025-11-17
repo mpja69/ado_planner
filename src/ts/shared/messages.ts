@@ -9,9 +9,19 @@ export const SP_REQ_AREAS = 'SP_REQ_AREAS';
 export const SP_AREAS = 'SP_AREAS';
 
 export const SP_PI_META = 'SP_PI_META' as const;
+export type PiMetaRow = {
+	root: string;
+	sprintNames: string[];
+};
 
 export const SP_REQ_DATA = 'SP_REQ_DATA';
 export const SP_DATA = 'SP_DATA';
+
+export const SP_AREA_FAVORITES = 'SP_AREA_FAVORITES' as const;
+
+export const SP_SET_ITERATION = "SP_SET_ITERATION";
+
+
 
 // Nice-to-have TS shapes (optional but helpful)
 export type OverlayToContent =
@@ -25,10 +35,11 @@ export type ContentToOverlay =
 	| { type: typeof SP_PONG }
 	// | { type: typeof SP_ITERATIONS; piRoots: string[] }
 	| { type: typeof SP_AREAS; areas: Array<{ id: string; name: string }> }
-	| { type: typeof SP_PI_META; meta: Array<{ root: string; sprintCount: number }> }
+	| { type: typeof SP_PI_META; meta: PiMetaRow[] }
 	| {
 		type: typeof SP_DATA; data: {
 			features: Array<{ id: number; title: string; state: string; areaPath: string; iterationPath: string; tags: string[] }>;
 			stories: Array<{ id: number; title: string; state: string; areaPath: string; iterationPath: string; parentId: number }>;
 		}
-	};
+	}
+	| { type: typeof SP_AREA_FAVORITES; favorites: string[] };

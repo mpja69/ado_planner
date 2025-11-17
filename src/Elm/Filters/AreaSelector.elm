@@ -29,7 +29,7 @@ type alias AreaMini =
 type alias Model =
     { selectedId : Maybe String
     , areas : List AreaMini
-    , favorites : Set String -- favorite names (lowercased)
+    , favorites : Set String -- favorite *ids*
     , query : String
     , dropdownOpen : Bool
     }
@@ -51,7 +51,7 @@ init : { selectedId : Maybe String, areas : List AreaMini, favorites : List Stri
 init cfg =
     { selectedId = cfg.selectedId
     , areas = cfg.areas
-    , favorites = Set.fromList (List.map String.toLower cfg.favorites)
+    , favorites = Set.fromList cfg.favorites
     , query = ""
     , dropdownOpen = False
     }
@@ -133,7 +133,7 @@ renderDropdown model =
             List.filter matches model.areas
 
         ( favs, others ) =
-            List.partition (\t -> isFavorite model.favorites (displayName t)) visible
+            List.partition (isFavorite model.favorites) visible
     in
     [ renderSearchBar model.query ]
         ++ renderSection "My favorite ARTs" model.favorites model.selectedId favs
@@ -155,23 +155,23 @@ renderSearchBar query =
 
 
 renderSection : String -> Set String -> Maybe String -> List AreaMini -> List (Html Msg)
-renderSection title favs selectedId items =
+renderSection title favIds selectedId items =
     if List.isEmpty items then
         []
 
     else
         Html.div [ A.class "font-semibold text-gray-700 px-3 pt-3 pb-1" ] [ Html.text title ]
-            :: List.map (renderItem favs selectedId) items
+            :: List.map (renderItem favIds selectedId) items
 
 
 renderItem : Set String -> Maybe String -> AreaMini -> Html Msg
-renderItem favs selectedId area =
+renderItem favIds selectedId area =
     let
         selected =
             isSelected selectedId area
 
         star =
-            if isFavorite favs (displayName area) then
+            if isFavorite favIds area then
                 Html.span [ A.class "text-yellow-500 mr-2" ] [ Html.text "★" ]
 
             else
@@ -245,9 +245,9 @@ isSelected sel t =
             False
 
 
-isFavorite : Set String -> String -> Bool
-isFavorite favs name =
-    Set.member (String.toLower name) favs
+isFavorite : Set String -> AreaMini -> Bool
+isFavorite favIds area =
+    Set.member area.id favIds
 
 
 

@@ -1,6 +1,8 @@
 module Data.Translate exposing
     ( PiContext
     , buildPi
+    , emptyPi
+    , iterationPathForSprintIx
     , translate
     )
 
@@ -15,9 +17,17 @@ import Types exposing (..)
 
 
 type alias PiContext =
-    { piRoot : String -- e.g. "Contoso\\ART\\PI-2025-1"
-    , sprintNames : List String -- ["Sprint 1", ..., "Sprint 5"]
-    , sprintPaths : List String -- piRoot ++ "\\" ++ sprintName for each
+    { piRoot : String
+    , sprintNames : List String
+    , sprintPaths : List String
+    }
+
+
+emptyPi : PiContext
+emptyPi =
+    { piRoot = ""
+    , sprintNames = []
+    , sprintPaths = []
     }
 
 
@@ -32,6 +42,18 @@ buildPi root sprintNames =
             List.map (\n -> root ++ "\\" ++ n) sprintNames
     in
     { piRoot = root, sprintNames = sprintNames, sprintPaths = paths }
+
+
+iterationPathForSprintIx : Int -> PiContext -> Maybe String
+iterationPathForSprintIx ix ctx =
+    -- InPI ix använder 1-baserad indexering (Sprint 1 = ix 1)
+    if ix <= 0 then
+        Nothing
+
+    else
+        ctx.sprintPaths
+            |> List.drop (ix - 1)
+            |> List.head
 
 
 
@@ -58,21 +80,6 @@ toIteration ctx path =
             -- 1-based
             Nothing ->
                 OutsidePI
-
-
-
--- OLD WAY: HARD CODED WHICH TAGS BECOMES TEST CHIPS
--- testsFromTags : List String -> Tests
--- testsFromTags tags =
---     let
---         has t =
---             List.any (\x -> String.toUpper x == t) tags
---     in
---     { sit = has "SIT", uat = has "UAT", e2e = has "E2E" }
---
---
--- NEW WAY: CONFIG DECIDES IF THESE TAGS BECOMES TEST CHIPS
--- Data.Translate.elm
 
 
 deriveTests : Config.TagPolicy -> List String -> Tests

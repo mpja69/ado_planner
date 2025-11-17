@@ -220,7 +220,7 @@ viewTeamPicker cfg model =
 
             allPill =
                 viewPickerPill
-                    { label = "All teams"
+                    { label = "All items"
                     , selected = selected == Nothing
                     , onClick = FM.SetTeam Nothing
                     }

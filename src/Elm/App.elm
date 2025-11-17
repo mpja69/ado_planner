@@ -5,7 +5,6 @@ import Components.Rails exposing (..)
 import Config
 import Data.Ado as Ado
 import Data.Filter as F
-import Data.Seed as Seed exposing (piRoots)
 import Data.Translate as T
 import Dict exposing (Dict)
 import Filters.AreaSelector as AS
@@ -30,19 +29,18 @@ import Ui exposing (UiSize(..))
 -- PORTS
 
 
-port requestIterations : () -> Cmd msg
-
-
-port receiveIterations : (List String -> msg) -> Sub msg
-
-
 port requestAreas : () -> Cmd msg
 
 
 port receiveAreas : (List { id : String, name : String } -> msg) -> Sub msg
 
 
-port receivePiMeta : (List { root : String, sprintCount : Int } -> msg) -> Sub msg
+port requestIterations : () -> Cmd msg
+
+
+port receivePiMeta :
+    (List { root : String, sprintNames : List String } -> msg)
+    -> Sub msg
 
 
 port requestData : { area : String, pi : String } -> Cmd msg
@@ -55,6 +53,12 @@ port receiveData :
      -> msg
     )
     -> Sub msg
+
+
+port receiveAreaFavorites : (List String -> msg) -> Sub msg
+
+
+port sendSetIteration : { id : Int, iterationPath : String } -> Cmd msg
 
 
 
@@ -80,7 +84,7 @@ type alias Model =
     , outbox : List AdoCmd
     , filters : FT.Model
     , config : Config.Config
-    , piSprintCount : Dict String Int
+    , piSprintNames : Dict String (List String)
     }
 
 
@@ -91,106 +95,21 @@ type alias Model =
 init : () -> ( Model, Cmd Msg )
 init _ =
     let
-        -- Temporary sprint labels so the grid has headers before any fetch.
-        -- These will be replaced when a real PI is chosen and runIntents builds a new context.
-        sprintNames =
-            [ "Sprint 1", "Sprint 2", "Sprint 3", "Sprint 4", "Sprint 5" ]
-
-        -- Harmless placeholder PI context; replaced after a real selection.
-        ctx =
-            T.buildPi "Contoso\\PI 1" sprintNames
-
-        -- Filters: start from FT.init, plug in hard-coded PI roots, and seed the custom Area selector
-        base : FT.Model
-        base =
-            FT.init
-
-        filters0 : FT.Model
-        filters0 =
-            { base | options = { iterations = Seed.piRoots } }
-
-        -- Feed Areas + (optional) favorites into the custom selector
-        ( as1, _ ) =
-            AS.update (AS.ReplaceAreas Seed.areas) filters0.areaSel
-
-        ( as2, _ ) =
-            AS.update (AS.ReplaceFavorites []) as1
-
-        filters1 : FT.Model
-        filters1 =
-            { filters0 | areaSel = as2 }
-
         model =
-            { sprintCount = List.length sprintNames
+            { sprintCount = 0
             , rows = []
             , draggingDelivery = Nothing
             , hoverDeliverySprint = Nothing
             , draggingStory = Nothing
             , hoverStorySprint = Nothing
-            , pi = ctx
+            , pi = T.emptyPi
             , outbox = []
-            , filters = filters1
+            , filters = FT.init
             , config = Config.default
-            , piSprintCount = Dict.empty
+            , piSprintNames = Dict.empty
             }
     in
-    ( model, Cmd.batch [ requestIterations (), requestAreas () ] )
-
-
-
--- Kör alla AdoCmd-intents synkront och töm outbox
-
-
-runIntents : Model -> Model
-runIntents model =
-    let
-        step : AdoCmd -> Model -> Model
-        step intent m =
-            case intent of
-                FetchFeatures { artAreaPath, piRoot } ->
-                    let
-                        sub =
-                            F.subsetSample artAreaPath piRoot Ado.sample
-
-                        -- prefer count from piSprintCount; fallback to your previous derive
-                        sCount =
-                            Dict.get piRoot model.piSprintCount
-                                |> Maybe.withDefault 5
-
-                        sprintNames =
-                            List.map (\n -> "Sprint " ++ String.fromInt n) (List.range 1 sCount)
-
-                        ctx =
-                            T.buildPi piRoot sprintNames
-
-                        -- NEW: derive visible tag list from the subset
-                        allTags =
-                            F.deriveTagsFromSample model.config.tags sub
-
-                        -- Keep only selected tags that still exist
-                        allowed =
-                            Set.fromList allTags
-
-                        keptSel =
-                            Set.intersect model.filters.sel.includeTags allowed
-
-                        filters2 =
-                            model.filters
-                                |> Lens.set FT.allTagsL allTags
-                                |> Lens.set (Lens.compose FT.selectionL FT.includeTagsL) keptSel
-                    in
-                    { m
-                        | rows = T.translate model.config ctx sub
-                        , sprintCount = sCount
-                        , outbox = []
-                        , filters = filters2
-                    }
-
-                _ ->
-                    -- not handled here; leave model as-is
-                    m
-    in
-    List.foldl step model model.outbox
+    ( model, Cmd.batch [ requestAreas (), requestIterations () ] )
 
 
 
@@ -200,10 +119,10 @@ runIntents model =
 subscriptions : Model -> Sub Msg
 subscriptions _ =
     Sub.batch
-        [ --receiveIterations GotIterations
-          receiveAreas GotAreas
+        [ receiveAreas GotAreas
         , receivePiMeta GotPiMeta
         , receiveData GotData
+        , receiveAreaFavorites GotAreaFavorites
         ]
 
 
@@ -214,10 +133,10 @@ subscriptions _ =
 type Msg
     = Grid GM.Msg
     | Filters FM.Msg
-      -- | GotIterations (List String)
     | GotAreas (List { id : String, name : String })
-    | GotPiMeta (List { root : String, sprintCount : Int })
+    | GotPiMeta (List { root : String, sprintNames : List String })
     | GotData { features : List Ado.AdoFeature, stories : List Ado.AdoStory }
+    | GotAreaFavorites (List String)
     | NoOp
 
 
@@ -231,11 +150,36 @@ update msg model =
         NoOp ->
             ( model, Cmd.none )
 
+        GotAreaFavorites favIds ->
+            let
+                ( as2, _ ) =
+                    AS.update
+                        (AS.ReplaceFavorites favIds)
+                        model.filters.areaSel
+
+                filters1 =
+                    model.filters
+            in
+            ( { model | filters = { filters1 | areaSel = as2 } }
+            , Cmd.none
+            )
+
         GotAreas miniAreas ->
             let
-                -- kör igenom AreaSelector.update med ReplaceAreas
+                -- 1) Mappa till det format AreaSelector vill ha
+                areasRaw : List { id : String, name : String }
+                areasRaw =
+                    List.map (\r -> { id = r.id, name = r.name }) miniAreas
+
+                -- 2) Sortera alfabetiskt på name (case-insensitive)
+                areasSorted : List { id : String, name : String }
+                areasSorted =
+                    areasRaw
+                        |> List.sortBy (\a -> String.toLower a.name)
+
+                -- 3) Skicka in den sorterade listan till AreaSelector
                 ( as2, chosen ) =
-                    AS.update (AS.ReplaceAreas (List.map (\r -> { id = r.id, name = r.name }) miniAreas)) model.filters.areaSel
+                    AS.update (AS.ReplaceAreas (List.map (\r -> { id = r.id, name = r.name }) areasSorted)) model.filters.areaSel
 
                 keepSel =
                     case ( model.filters.sel.area, chosen ) of
@@ -279,10 +223,15 @@ update msg model =
                         , hoverDeliverySprint = g2.hoverDeliverySprint
                         , draggingStory = g2.draggingStory
                         , hoverStorySprint = g2.hoverStorySprint
-                        , outbox = intents ++ model.outbox
+                        , outbox = []
                     }
+
+                cmdUpdates =
+                    intents
+                        |> List.filterMap (adoCmdToCmd model2)
+                        |> Cmd.batch
             in
-            ( model2, Cmd.none )
+            ( model2, cmdUpdates )
 
         Filters fmsg ->
             let
@@ -292,12 +241,7 @@ update msg model =
                 cmdFetch =
                     case ( filters2.sel.area, filters2.sel.iteration ) of
                         ( Just art, Just pi ) ->
-                            if List.isEmpty model.rows then
-                                -- SEND PORT instead of building local sample intent
-                                requestData { area = art, pi = pi }
-
-                            else
-                                Cmd.none
+                            requestData { area = art, pi = pi }
 
                         _ ->
                             Cmd.none
@@ -306,12 +250,17 @@ update msg model =
 
         GotPiMeta rows ->
             let
-                -- build Dict root -> sprintCount
-                dict =
+                dictNames : Dict String (List String)
+                dictNames =
                     List.foldl
-                        (\r acc -> Dict.insert r.root r.sprintCount acc)
+                        (\r acc -> Dict.insert r.root r.sprintNames acc)
                         Dict.empty
                         rows
+
+                -- DEBUG: leave these while verifying
+                _ =
+                    Debug.log "GotPiMeta (sprintNames)"
+                        dictNames
 
                 -- the two PI roots we’ll show as pills
                 roots : List String
@@ -349,7 +298,7 @@ update msg model =
                         , sel = { sel1 | iteration = keepIter }
                     }
             in
-            ( { model | piSprintCount = dict, filters = filters2 }, Cmd.none )
+            ( { model | piSprintNames = dictNames, filters = filters2 }, Cmd.none )
 
         GotData payload ->
             let
@@ -363,24 +312,20 @@ update msg model =
                 piRoot =
                     Maybe.withDefault "" model.filters.sel.iteration
 
-                sCount =
-                    Dict.get piRoot model.piSprintCount |> Maybe.withDefault 5
+                sprintNamesFromPi =
+                    Dict.get piRoot model.piSprintNames
+                        |> Maybe.withDefault []
 
-                piSeg : String
-                piSeg =
-                    -- last segment of "Alfa Laval Portfolio\PI 30" -> "PI 30"
-                    case List.reverse (String.split "\\" piRoot) of
-                        seg :: _ ->
-                            seg
-
-                        [] ->
-                            "PI"
-
-                sprintNames : List String
+                -- om av ngn anledning listan saknas, fallback
                 sprintNames =
-                    List.map
-                        (\n -> piSeg ++ " Sprint " ++ String.fromInt n)
-                        (List.range 1 sCount)
+                    if List.isEmpty sprintNamesFromPi then
+                        -- t.ex. default 5, eller [] om du vill
+                        List.map (\n -> "Sprint " ++ String.fromInt n) (List.range 1 5)
+                            |> Debug.log "Generated SprintNames: "
+
+                    else
+                        sprintNamesFromPi
+                            |> Debug.log "Existing SprintNames: "
 
                 ctx =
                     T.buildPi piRoot sprintNames
@@ -429,7 +374,7 @@ update msg model =
             in
             ( { model
                 | rows = rows2
-                , sprintCount = sCount
+                , sprintCount = List.length sprintNames
                 , pi = ctx
                 , filters = filters2
               }
@@ -471,6 +416,25 @@ filterByTags mode tags rows =
 
                 FT.TagOr ->
                     List.filter hasAny rows
+
+
+adoCmdToCmd : Model -> AdoCmd -> Maybe (Cmd Msg)
+adoCmdToCmd model intent =
+    case intent of
+        SetIteration payload ->
+            case T.iterationPathForSprintIx payload.toSprintIx model.pi of
+                Just path ->
+                    Just <|
+                        sendSetIteration
+                            { id = payload.id
+                            , iterationPath = path
+                            }
+
+                Nothing ->
+                    Nothing
+
+        _ ->
+            Nothing
 
 
 

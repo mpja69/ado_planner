@@ -112,7 +112,8 @@ featureRowView : Toggles -> GT.Model -> Feature -> List (Html GM.Msg)
 featureRowView toggles model row =
     let
         can =
-            GL.canInteract row
+            -- GL.canInteract row -- HACK: Always make the cards interactive!
+            True
 
         --mode
         warnKind : FeatureWarn
@@ -201,7 +202,8 @@ sprintCell toggles model row ix =
     let
         can : Bool
         can =
-            GL.canInteract row
+            -- GL.canInteract row -- HACK: Always make the cards interactive!
+            True
 
         -- 1) Content in this cell -----------------------------------
         storiesHere : List Story
@@ -423,9 +425,6 @@ storyCard isGhost can s =
              else
                 [ span [ A.class "font-medium truncate text-[13px]" ] [ text s.title ] ]
             )
-
-        --  Don't need iteration warning?!?!
-        --, div [ A.class "flex items-center shrink-0" ] [ warnIterationBadge Tiny s.iteration ]
         ]
 
 
@@ -459,6 +458,7 @@ featureCard toggles isGhost warnKind can row =
                 ++ cardToneForStatus row.status
                 ++ ghostClass
             )
+            :: A.title row.title
             :: dragAttrs
         )
         [ -- ROW: rail + content
@@ -497,7 +497,8 @@ testStrip can featureId tests =
         mk label active kind =
             testChipView Tiny
                 { label = label, active = active }
-                (if can then
+                -- HACK: Do not update tests
+                (if False then
                     [ Html.Events.onClick (GM.ToggleTest featureId kind) ]
 
                  else

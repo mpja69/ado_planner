@@ -5,12 +5,14 @@ import {
 	SP_REQ_ITERATIONS, // SP_ITERATIONS,
 	SP_REQ_AREAS, SP_AREAS,
 	SP_PI_META,
+	SP_AREA_FAVORITES,
+	SP_SET_ITERATION,
 } from '../shared/messages';
 import { fetchProjectIterations, flattenPiRoots, pickCurrentAndNext } from "./fetch/iterations";
 import { fetchAreaRoots } from "./fetch/areas";
 import { SP_REQ_DATA, SP_DATA } from '../shared/messages';
 import { runWiql, runWiqlLinks, wiqlFeatures, wiqlStoriesUnderFeatureIds } from './fetch/wiql';
-import { chunk, fetchWorkItemsBatch } from "./fetch/workitems";
+import { chunk, fetchWorkItemsBatch, updateWorkItemIteration } from "./fetch/workitems";
 import { toFeatureDto, toStoryDto, type FeatureDto, type StoryDto } from './fetch/mappers';
 
 // ─────────────────────────────────────────────────────────────
@@ -99,13 +101,20 @@ window.addEventListener('message', async (ev) => {
 				const areas = await fetchAreaRoots(org, project);
 				clog('sent', SP_AREAS, '→', areas.length, 'areas');
 				reply(ev, { type: SP_AREAS, areas });
+
+				// TEMP: inga riktiga favoriter ännu → skicka tom lista
+				const favoriteAreaIds: string[] = [];
+				reply(ev, { type: SP_AREA_FAVORITES, favorites: favoriteAreaIds });
+				clog('sent', SP_AREA_FAVORITES, '→', favoriteAreaIds);
+
 			} catch (e) {
 				console.error('[SP][content]', SP_REQ_AREAS, 'failed', e);
 				reply(ev, { type: SP_AREAS, areas: [] });
+				// Skicka tom favorites också vid fel, så Elm-koden inte väntar på något:
+				reply(ev, { type: SP_AREA_FAVORITES, favorites: [] });
 			}
 			break;
 		}
-
 		case SP_REQ_ITERATIONS: {
 			try {
 				const { org, project } = getAdoContext();
@@ -117,13 +126,14 @@ window.addEventListener('message', async (ev) => {
 
 				// Send only current + next display roots to Elm
 				const piRoots = [current, next].filter(Boolean) as string[];
-				// reply(ev, { type: SP_ITERATIONS, piRoots });
 
 				// Also send sprintCount meta (exclude IP sprint)
 				const meta = piRoots.map((r) => {
 					const pi = piList.find((p) => p.root === r);
-					const sprintCount = pi ? Math.max(1, pi.sprintNames.length) : 5;
-					return { root: r, sprintCount };
+					return {
+						root: r,
+						sprintNames: pi ? pi.sprintNames : []
+					};
 				});
 				reply(ev, { type: SP_PI_META, meta });
 
@@ -228,6 +238,25 @@ window.addEventListener('message', async (ev) => {
 			} catch (e) {
 				console.error('[SP][content] SP_REQ_DATA failed', e);
 				reply(ev, { type: SP_DATA, payload: { features: [], stories: [] } });
+			}
+			break;
+		}
+		case SP_SET_ITERATION: {
+			try {
+				const { id, iterationPath } = msg.payload || {};
+				if (typeof id !== "number" || typeof iterationPath !== "string") {
+					console.warn("[SP][content] SP_SET_ITERATION → invalid payload", msg.payload);
+					return;
+				}
+
+				const { org, project } = getAdoContext();
+				console.log("[SP][content] SP_SET_ITERATION → update", { id, iterationPath });
+
+				await updateWorkItemIteration(org, project, id, iterationPath);
+
+				console.log("[SP][content] iteration updated OK", { id, iterationPath });
+			} catch (e) {
+				console.error("[SP][content] SP_SET_ITERATION failed", e);
 			}
 			break;
 		}

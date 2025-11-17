@@ -5,6 +5,8 @@ import {
 	SP_PING, SP_PONG,
 	SP_PI_META,
 	SP_REQ_DATA, SP_DATA,
+	SP_AREA_FAVORITES,
+	SP_SET_ITERATION,
 } from '../shared/messages';
 
 /** Wire Elm ports for iterations + areas and general message bridge */
@@ -43,6 +45,19 @@ function wireElm(app: any) {
 		console.warn('[SP][overlay] port requestData missing');
 	}
 
+	if (app.ports.sendSetIteration) {
+		app.ports.sendSetIteration.subscribe(({ id, iterationPath }) => {
+			console.log("[SP][overlay] sendSetIteration → post SP_SET_ITERATION", { id, iterationPath });
+
+			window.parent.postMessage(
+				{
+					type: SP_SET_ITERATION,
+					payload: { id, iterationPath },
+				},
+				"*"
+			);
+		});
+	}
 	// ---- overlay ← content: en enda message-listener för allt ----
 	const onMessage = (ev: MessageEvent) => {
 		const msg = ev.data;
@@ -65,7 +80,13 @@ function wireElm(app: any) {
 				}
 				break;
 			}
-
+			case SP_AREA_FAVORITES: {
+				if (Array.isArray(msg.favorites)) {
+					console.log('[SP][overlay] got SP_AREA_FAVORITES → forward to Elm', msg.favorites);
+					app?.ports?.receiveAreaFavorites?.send(msg.favorites);
+				}
+				break;
+			}
 			case SP_PONG: {
 				console.log('[SP][overlay] got PONG from content/page');
 				break;

@@ -26,10 +26,6 @@ export async function runWiql(
 
 // ----- WIQL → link relations (workitemLinks) -----
 
-// Form enligt ADO workitemLinks:
-// - root rows:   { rel: null, source: null, target: { id, url } }
-// - link rows:   { rel: "System.LinkTypes.Hierarchy-Forward",
-//                  source: { id, url }, target: { id, url } }
 type WiqlRelationsRow = {
 	rel?: string | null;
 	source?: { id: number; url?: string } | null;
@@ -81,6 +77,7 @@ WHERE
   AND [System.WorkItemType] = 'Feature'
   AND [System.AreaPath] UNDER "${areaRoot}"
   AND [System.IterationPath] UNDER "${piRoot}"
+  AND [System.State] <> 'Removed'
 ORDER BY [System.ChangedDate] DESC
 `.trim();
 }
@@ -106,6 +103,7 @@ WHERE
   [Source].[System.Id] IN (${idList})
   AND [System.Links.LinkType] = 'System.LinkTypes.Hierarchy-Forward'
   AND [Target].[System.WorkItemType] IN ('User Story','Product Backlog Item','Story')
+  AND [Target].[System.State] <> 'Removed'
 MODE (Recursive)
 `.trim();
 }
