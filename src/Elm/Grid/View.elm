@@ -1,4 +1,4 @@
-module Grid.View exposing (appBgColor, view)
+module Grid.View exposing (Toggles, appBgColor, view)
 
 import Grid.Logic as GL
 import Grid.Msg as GM
@@ -15,7 +15,9 @@ import Ui.Theme exposing (..)
 
 
 type alias Toggles =
-    { showTests : Bool }
+    { showTests : Bool
+    , editableTests : Bool
+    }
 
 
 
@@ -504,7 +506,7 @@ featureCard toggles isGhost warnKind can row =
                   if warnKind == NoWarn then
                     div [ A.class "mt-1 flex items-center justify-between gap-2 min-w-0" ]
                         (statusPill Tiny row.status
-                            :: maybe toggles.showTests (testStrip can row.featureId row.tests)
+                            :: maybe toggles.showTests (testStrip can toggles.editableTests row.featureId row.tests)
                         )
 
                   else
@@ -515,14 +517,14 @@ featureCard toggles isGhost warnKind can row =
         ]
 
 
-testStrip : Bool -> Int -> Tests -> Html GM.Msg
-testStrip can featureId tests =
+testStrip : Bool -> Bool -> Int -> Tests -> Html GM.Msg
+testStrip can editableTests featureId tests =
     let
         mk label active kind =
             testChipView Tiny
                 { label = label, active = active }
                 -- HACK: Do not update tests
-                (if False then
+                (if can && editableTests then
                     [ E.onClick (GM.ToggleTest featureId kind) ]
 
                  else

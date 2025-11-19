@@ -65,6 +65,18 @@ port receiveAreaFavorites : (List String -> msg) -> Sub msg
 port sendSetIteration : { id : Int, iterationPath : String } -> Cmd msg
 
 
+port sendUpdateTests :
+    { id : Int
+    , sit : Bool
+    , uat : Bool
+    , e2e : Bool
+    , sitTag : String
+    , uatTag : String
+    , e2eTag : String
+    }
+    -> Cmd msg
+
+
 
 -- TODO:
 -- Add planning of of stories without Feature
@@ -221,17 +233,11 @@ update msg model =
 
         Grid gm ->
             let
-                -- convert App.Model -> Grid.Model, then back by copying fields
                 ( g2, intents ) =
                     GU.update gm model.grid
 
                 model2 =
-                    { model
-                        | grid = g2
-                        , outbox = []
-
-                        -- , outbox = intents ++ model.outbox
-                    }
+                    { model | grid = g2 }
 
                 cmdUpdates =
                     intents
@@ -421,6 +427,26 @@ adoCmdToCmd model intent =
                 Nothing ->
                     Nothing
 
+        SetFeatureTags payload ->
+            let
+                tcfg =
+                    model.config.tags.testTags
+
+                _ =
+                    Debug.log "SetFeatureTags → payload"
+                        ( payload.sit, payload.uat, payload.e2e )
+            in
+            Just <|
+                sendUpdateTests
+                    { id = payload.featureId
+                    , sit = payload.sit
+                    , uat = payload.uat
+                    , e2e = payload.e2e
+                    , sitTag = tcfg.sit
+                    , uatTag = tcfg.uat
+                    , e2eTag = tcfg.e2e
+                    }
+
         _ ->
             Nothing
 
@@ -442,8 +468,11 @@ main =
 view : Model -> Html Msg
 view model =
     let
+        toggles : GV.Toggles
         toggles =
-            { showTests = model.config.tags.enableTests }
+            { showTests = model.config.tags.enableTests
+            , editableTests = model.config.tags.editableTests
+            }
 
         selectedTeam : Maybe String
         selectedTeam =

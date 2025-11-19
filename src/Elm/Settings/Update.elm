@@ -42,3 +42,8 @@ update msg model =
             ( { model | teamTagsInput = s }
             , \cfg -> ST.toConfig { model | teamTagsInput = s } cfg
             )
+
+        SM.ToggleEditableTests flag ->
+            ( { model | editableTests = flag }
+            , \cfg -> ST.toConfig { model | editableTests = flag } cfg
+            )

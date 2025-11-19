@@ -25,6 +25,7 @@ type alias TagPolicy =
         }
     , enableTeamTags : Bool
     , teamTags : Set String
+    , editableTests : Bool
     }
 
 
@@ -42,6 +43,7 @@ default =
         , testTags = { sit = "SIT", uat = "UAT", e2e = "E2E" }
         , enableTeamTags = True
         , teamTags = Set.fromList [ "TeamAccount", "TeamAssort", "TeamPortal" ]
+        , editableTests = False
         }
     }
 

@@ -21,7 +21,7 @@ export const SP_AREA_FAVORITES = 'SP_AREA_FAVORITES' as const;
 
 export const SP_SET_ITERATION = "SP_SET_ITERATION";
 
-
+export const SP_SET_TESTS = "SP_SET_TESTS";
 
 // Nice-to-have TS shapes (optional but helpful)
 export type OverlayToContent =

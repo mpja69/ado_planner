@@ -7,6 +7,7 @@ import {
 	SP_REQ_DATA, SP_DATA,
 	SP_AREA_FAVORITES,
 	SP_SET_ITERATION,
+	SP_SET_TESTS,
 } from '../shared/messages';
 
 /** Wire Elm ports for iterations + areas and general message bridge */
@@ -53,6 +54,18 @@ function wireElm(app: any) {
 				{
 					type: SP_SET_ITERATION,
 					payload: { id, iterationPath },
+				},
+				"*"
+			);
+		});
+	}
+	if (app.ports.sendUpdateTests) {
+		app.ports.sendUpdateTests.subscribe(payload => {
+			console.log("[SP][overlay] sendUpdateTests → post SP_SET_TESTS", payload);
+			window.parent.postMessage(
+				{
+					type: SP_SET_TESTS,
+					payload
 				},
 				"*"
 			);

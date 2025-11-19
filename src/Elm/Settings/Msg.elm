@@ -9,3 +9,4 @@ type Msg
     | SetE2eTag String
     | SetEnableTeamTags Bool
     | SetTeamTagsInput String
+    | ToggleEditableTests Bool

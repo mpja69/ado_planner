@@ -71,6 +71,15 @@ viewTestsSection model =
             , smallTextInput "UAT tag" model.uatTag SM.SetUatTag
             , smallTextInput "E2E tag" model.e2eTag SM.SetE2eTag
             ]
+        , label [ A.class "flex items-center gap-2 text-xs text-slate-700" ]
+            [ input
+                [ A.type_ "checkbox"
+                , A.checked model.editableTests
+                , E.onCheck SM.ToggleEditableTests
+                ]
+                []
+            , text "Test tags are editable"
+            ]
         ]
 
 

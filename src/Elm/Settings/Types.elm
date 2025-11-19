@@ -16,6 +16,7 @@ type alias Model =
     , e2eTag : String
     , enableTeamTags : Bool
     , teamTagsInput : String
+    , editableTests : Bool
     }
 
 
@@ -37,6 +38,7 @@ fromConfig cfg =
     , e2eTag = tp.testTags.e2e
     , enableTeamTags = tp.enableTeamTags
     , teamTagsInput = teamTagsStr
+    , editableTests = tp.editableTests
     }
 
 
@@ -60,6 +62,7 @@ toConfig m oldCfg =
                 }
             , enableTeamTags = m.enableTeamTags
             , teamTags = parseTeamTags m.teamTagsInput
+            , editableTests = m.editableTests
             }
     in
     { oldCfg | tags = newTagPolicy }

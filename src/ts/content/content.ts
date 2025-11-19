@@ -7,12 +7,13 @@ import {
 	SP_PI_META,
 	SP_AREA_FAVORITES,
 	SP_SET_ITERATION,
+	SP_SET_TESTS,
 } from '../shared/messages';
 import { fetchProjectIterations, flattenPiRoots, pickCurrentAndNext } from "./fetch/iterations";
 import { fetchAreaRoots } from "./fetch/areas";
 import { SP_REQ_DATA, SP_DATA } from '../shared/messages';
 import { runWiql, runWiqlLinks, wiqlFeatures, wiqlStoriesUnderFeatureIds } from './fetch/wiql';
-import { chunk, fetchWorkItemsBatch, updateWorkItemIteration } from "./fetch/workitems";
+import { chunk, fetchWorkItemsBatch, updateWorkItemIteration, updateWorkItemTests } from "./fetch/workitems";
 import { toFeatureDto, toStoryDto, type FeatureDto, type StoryDto } from './fetch/mappers';
 
 // ─────────────────────────────────────────────────────────────
@@ -257,6 +258,29 @@ window.addEventListener('message', async (ev) => {
 				console.log("[SP][content] iteration updated OK", { id, iterationPath });
 			} catch (e) {
 				console.error("[SP][content] SP_SET_ITERATION failed", e);
+			}
+			break;
+		}
+		case SP_SET_TESTS: {
+			try {
+				const { org, project } = getAdoContext();
+				const p = msg.payload as {
+					id: number;
+					sit: boolean;
+					uat: boolean;
+					e2e: boolean;
+					sitTag: string;
+					uatTag: string;
+					e2eTag: string;
+				};
+
+				console.log("[SP][content] SP_SET_TESTS → update", p);
+
+				await updateWorkItemTests(org, project, p);
+
+				console.log("[SP][content] tests updated OK", p);
+			} catch (e) {
+				console.error("[SP][content] SP_SET_TESTS failed", e, msg.payload);
 			}
 			break;
 		}
