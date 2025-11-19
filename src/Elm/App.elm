@@ -77,16 +77,12 @@ port sendUpdateTests :
     -> Cmd msg
 
 
+port openWorkItem : Int -> Cmd msg
+
+
 
 -- TODO:
 -- Add planning of of stories without Feature
--- Maybe have specific rows for different Type of Work
---    Technical Improvements
---    Test Automation
--- Add a Settings where you can
---    Map tests -> Tags
---    Map ToW -> Tags
--- Make use of Feature Flags
 
 
 type alias Model =
@@ -446,6 +442,9 @@ adoCmdToCmd model intent =
                     , uatTag = tcfg.uat
                     , e2eTag = tcfg.e2e
                     }
+
+        OpenWorkItem id ->
+            Just (openWorkItem id)
 
         _ ->
             Nothing

@@ -68,14 +68,27 @@ maybe cond node =
 view : Toggles -> GT.Model -> Html GM.Msg
 view toggles model =
     let
+        hasUnscheduled : Bool
         hasUnscheduled =
             GL.hasUnscheduledItems model.rows
 
+        showTray : Bool
+        showTray =
+            hasUnscheduled && model.showUnscheduled
+
+        leftColWidth : String
         leftColWidth =
-            if hasUnscheduled then
+            if showTray then
+                -- fullt läge: plats för feature + stories
                 "220px"
 
+            else if hasUnscheduled then
+                -- det finns oschemalagda items, men användaren har vikt ihop kolumnen:
+                -- gör den bara tillräckligt bred för chevronen
+                "28px"
+
             else
+                -- inga unscheduled alls → i praktiken nästan ingen första kolumn
                 "12px"
 
         templateCols =
@@ -86,56 +99,115 @@ view toggles model =
         , A.style "grid-template-columns" templateCols
         , A.class ("gap-2" ++ gridBgColor)
         ]
-        (headerRow hasUnscheduled model.showUnscheduled model.sprintCount
-            :: List.concatMap (featureRowView toggles model) model.rows
+        (headerRow hasUnscheduled showTray model.sprintCount
+            :: List.concatMap (featureRowView toggles model showTray) model.rows
         )
 
 
+
+-- headerRow : Bool -> Bool -> Int -> Html GM.Msg
+-- headerRow hasUnscheduled showTray n =
+--     let
+--         headCell s =
+--             div [ A.class "text-xs font-semibold uppercase tracking-wide text-slate-600 px-2 py-1" ] [ text s ]
+--
+--         mutedCell =
+--             div [ A.class "px-0 py-0" ] []
+--
+--         unscheduledHeader : Html GM.Msg
+--         unscheduledHeader =
+--             if not hasUnscheduled then
+--                 mutedCell
+--
+--             else
+--                 div
+--                     [ A.class "flex items-center gap-2 px-2 py-1 text-xs font-semibold uppercase tracking-wide text-slate-600" ]
+--                     [ text "Not in a Sprint in this PI"
+--                     , button
+--                         [ A.type_ "button"
+--                         , A.class "inline-flex items-center justify-center w-5 h-5 rounded hover:bg-slate-200"
+--                         , E.onClick GM.ToggleUnscheduled
+--                         ]
+--                         [ Icons.chevronDown
+--                             [ Svg.Attributes.class
+--                                 ("w-3 h-3 transition-transform "
+--                                     ++ (if showTray then
+--                                             "rotate-0"
+--
+--                                         else
+--                                             "-rotate-90"
+--                                        )
+--                                 )
+--                             ]
+--                         ]
+--                     ]
+--     in
+--     div [ A.class "contents" ]
+--         (unscheduledHeader
+--             :: List.map (\i -> headCell ("Sprint " ++ String.fromInt i)) (List.range 1 n)
+--         )
+
+
 headerRow : Bool -> Bool -> Int -> Html GM.Msg
-headerRow hasUnscheduled showUnscheduled n =
+headerRow hasUnscheduled showTray n =
     let
         headCell s =
-            div [ A.class "text-xs font-semibold uppercase tracking-wide text-slate-600 px-2 py-1" ] [ text s ]
+            div
+                [ A.class "text-xs font-semibold uppercase tracking-wide text-slate-600 px-2 py-1" ]
+                [ text s ]
 
         mutedCell =
             div [ A.class "px-0 py-0" ] []
+
+        chevronButton : Html GM.Msg
+        chevronButton =
+            button
+                [ A.type_ "button"
+                , A.class "inline-flex items-center justify-center w-5 h-5 rounded hover:bg-slate-200"
+                , E.onClick GM.ToggleUnscheduled
+                ]
+                [ Icons.chevronDown
+                    [ Svg.Attributes.class
+                        ("w-3 h-3 transition-transform "
+                            ++ (if showTray then
+                                    "rotate-0"
+
+                                else
+                                    "-rotate-90"
+                               )
+                        )
+                    ]
+                ]
 
         unscheduledHeader : Html GM.Msg
         unscheduledHeader =
             if not hasUnscheduled then
                 mutedCell
 
-            else
+            else if showTray then
+                -- öppet läge: text + chevron
                 div
                     [ A.class "flex items-center gap-2 px-2 py-1 text-xs font-semibold uppercase tracking-wide text-slate-600" ]
                     [ text "Not in a Sprint in this PI"
-                    , button
-                        [ A.type_ "button"
-                        , A.class "inline-flex items-center justify-center w-5 h-5 rounded hover:bg-slate-200"
-                        , E.onClick GM.ToggleUnscheduled
-                        ]
-                        [ Icons.chevronDown
-                            [ Svg.Attributes.class
-                                ("w-3 h-3 transition-transform "
-                                    ++ (if showUnscheduled then
-                                            "rotate-0"
-
-                                        else
-                                            "-rotate-90"
-                                       )
-                                )
-                            ]
-                        ]
+                    , chevronButton
                     ]
+
+            else
+                -- hopfällt läge: bara en smal cell med chevronen
+                div
+                    [ A.class "flex items-center justify-center px-1 py-1" ]
+                    [ chevronButton ]
     in
     div [ A.class "contents" ]
         (unscheduledHeader
-            :: List.map (\i -> headCell ("Sprint " ++ String.fromInt i)) (List.range 1 n)
+            :: List.map
+                (\i -> headCell ("Sprint " ++ String.fromInt i))
+                (List.range 1 n)
         )
 
 
-featureRowView : Toggles -> GT.Model -> Feature -> List (Html GM.Msg)
-featureRowView toggles model row =
+featureRowView : Toggles -> GT.Model -> Bool -> Feature -> List (Html GM.Msg)
+featureRowView toggles model showTray row =
     let
         can =
             -- GL.canInteract row -- HACK: Always make the cards interactive!
@@ -214,7 +286,7 @@ featureRowView toggles model row =
             List.map (\ix -> sprintCell toggles model row ix)
                 (List.range 1 model.sprintCount)
     in
-    (if isUnscheduledItems && model.showUnscheduled then
+    (if isUnscheduledItems && showTray then
         fullFeatureCell
 
      else
@@ -433,7 +505,7 @@ storyCard isGhost can s =
     in
     div
         ([ A.class
-            ("min-w-0 flex items-center justify-between gap-2 pl-1 pr-2 py-1 rounded-lg border select-none "
+            ("w-[90%] min-w-0 flex items-center justify-between gap-2 pl-1 pr-2 py-1 rounded-lg border select-none "
                 ++ cardToneForStatus s.status
                 ++ ghostClass
             )
@@ -445,11 +517,20 @@ storyCard isGhost can s =
           div [ A.class "min-w-0 inline-flex items-center gap-1.5" ]
             (if can then
                 [ dotRailPx (railSpec Small Regular)
-                , span [ A.class "font-medium truncate text-[13px]" ] [ text s.title ]
+                , span
+                    [ A.class "font-medium truncate text-[13px]"
+                    , E.onClick (GM.OpenWorkItem s.id)
+                    ]
+                    [ text s.title ]
                 ]
 
              else
-                [ span [ A.class "font-medium truncate text-[13px]" ] [ text s.title ] ]
+                [ span
+                    [ A.class "font-medium truncate text-[13px]"
+                    , E.onClick (GM.OpenWorkItem s.id)
+                    ]
+                    [ text s.title ]
+                ]
             )
         ]
 
@@ -480,7 +561,7 @@ featureCard toggles isGhost warnKind can row =
     in
     div
         (A.class
-            ("mt-1 rounded-xl border select-none overflow-hidden "
+            ("mt-1 rounded-xl border-2 shadow-sm select-none overflow-hidden ring-1 ring-slate-200 "
                 ++ cardToneForStatus row.status
                 ++ ghostClass
             )
@@ -497,10 +578,14 @@ featureCard toggles isGhost warnKind can row =
               else
                 div [ A.class "ml-2" ] []
             , -- content
-              div [ A.class "flex-1 pl-1 pr-2 py-2 min-w-0" ]
+              div [ A.class "flex-1 pl-2 pr-3 py-2.5 min-w-0" ]
                 [ -- row 1: title + status + warn
                   div [ A.class "flex items-center justify-between gap-2 min-w-0" ]
-                    [ span [ A.class "text-[13px] font-semibold truncate" ] [ text row.title ]
+                    [ span
+                        [ A.class "text-[13px] font-semibold truncate"
+                        , E.onClick (GM.OpenWorkItem row.featureId)
+                        ]
+                        [ text row.title ]
                     ]
                 , -- row 2: delivery + test chips
                   if warnKind == NoWarn then

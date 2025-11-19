@@ -115,3 +115,7 @@ update msg model =
                             []
             in
             ( { model | rows = rows2 }, intents )
+
+        GM.OpenWorkItem id ->
+            -- grid-modellen ändras inte av att vi öppnar en ny tab
+            ( model, [ Types.OpenWorkItem id ] )
