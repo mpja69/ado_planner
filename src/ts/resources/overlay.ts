@@ -1,13 +1,12 @@
 // src/ts/resources/overlay.ts
 import {
-	SP_REQ_ITERATIONS, // SP_ITERATIONS,
+	SP_REQ_ITERATIONS, SP_ITERATIONS,
 	SP_REQ_AREAS, SP_AREAS,
-	SP_PING, SP_PONG,
-	SP_PI_META,
 	SP_REQ_DATA, SP_DATA,
 	SP_AREA_FAVORITES,
 	SP_SET_ITERATION,
 	SP_SET_TESTS,
+	SP_OPEN_WORKITEM,
 } from '../shared/messages';
 
 /** Wire Elm ports for iterations + areas and general message bridge */
@@ -71,19 +70,26 @@ function wireElm(app: any) {
 			);
 		});
 	}
+	if (app.ports.openWorkItem) {
+		app.ports.openWorkItem.subscribe(id => {
+			console.log("[SP][overlay] openWorkItem → post SP_OPEN_WORKITEM", id);
+
+			// Viktigt: prata med parent (content.js), inte försöka öppna själv
+			window.parent.postMessage(
+				{
+					type: SP_OPEN_WORKITEM,
+					payload: { id }
+				},
+				"*"
+			);
+		});
+	}
 	// ---- overlay ← content: en enda message-listener för allt ----
 	const onMessage = (ev: MessageEvent) => {
 		const msg = ev.data;
 		if (!msg || typeof msg !== 'object') return;
 
 		switch (msg.type) {
-			// case SP_ITERATIONS: {
-			// 	if (Array.isArray(msg.piRoots)) {
-			// 		console.log('[SP][overlay] got', SP_ITERATIONS, '→ forward to Elm', msg.piRoots);
-			// 		app?.ports?.receiveIterations?.send(msg.piRoots);
-			// 	}
-			// 	break;
-			// }
 
 			case SP_AREAS: {
 				// Förväntat: { areas: Array<{ id: string, name: string }> }
@@ -100,14 +106,10 @@ function wireElm(app: any) {
 				}
 				break;
 			}
-			case SP_PONG: {
-				console.log('[SP][overlay] got PONG from content/page');
-				break;
-			}
 
-			case SP_PI_META: {
-				if (Array.isArray(msg.meta)) {
-					app?.ports?.receivePiMeta?.send(msg.meta);
+			case SP_ITERATIONS: {
+				if (Array.isArray(msg.iterations)) {
+					app?.ports?.receivePiMeta?.send(msg.iterations);
 				}
 				break;
 			}
@@ -125,11 +127,6 @@ function wireElm(app: any) {
 
 	window.addEventListener('message', onMessage);
 
-	// Skicka en PING kort efter start (ADO-sidan pingar också tillbaka)
-	setTimeout(() => {
-		console.log('[SP][overlay] sending PING to parent');
-		window.parent.postMessage({ type: SP_PING }, '*');
-	}, 400);
 }
 
 /** Starta Elm när #app finns */

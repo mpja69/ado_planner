@@ -1,10 +1,10 @@
 // src/ts/content/mount.ts
-import { SP_PING, SP_PONG } from '../shared/messages';
+// import { SP_PING, SP_PONG } from '../shared/messages';
 
 const OVERLAY_ID = 'sp-overlay-root';
 const IFRAME_ID = 'sp-overlay-iframe';
 
-let pongListener: ((ev: MessageEvent) => void) | null = null;
+// let pongListener: ((ev: MessageEvent) => void) | null = null;
 
 export function openOverlay() {
 	if (document.getElementById(OVERLAY_ID)) return;
@@ -50,48 +50,48 @@ export function openOverlay() {
 	const intervalMs = 250;
 	let pingTimer: number | null = null;
 
-	const sendPing = () => {
-		const win = frame.contentWindow;
-		if (!win) return;
-		try {
-			win.postMessage({ type: SP_PING }, '*');
-			console.debug('[SP][ADO] sent PING to overlay');
-		} catch (e) {
-			console.warn('[SP][ADO] postMessage failed', e);
-		}
-	};
+	// const sendPing = () => {
+	// 	const win = frame.contentWindow;
+	// 	if (!win) return;
+	// 	try {
+	// 		win.postMessage({ type: SP_PING }, '*');
+	// 		console.debug('[SP][ADO] sent PING to overlay');
+	// 	} catch (e) {
+	// 		console.warn('[SP][ADO] postMessage failed', e);
+	// 	}
+	// };
 
-	frame.addEventListener('load', () => {
-		sendPing();
-		pingTimer = window.setInterval(() => {
-			if (gotPong || tries++ >= maxTries) {
-				if (pingTimer) window.clearInterval(pingTimer);
-				pingTimer = null;
-				return;
-			}
-			sendPing();
-		}, intervalMs);
-	});
+	// frame.addEventListener('load', () => {
+	// 	sendPing();
+	// 	pingTimer = window.setInterval(() => {
+	// 		if (gotPong || tries++ >= maxTries) {
+	// 			if (pingTimer) window.clearInterval(pingTimer);
+	// 			pingTimer = null;
+	// 			return;
+	// 		}
+	// 		sendPing();
+	// 	}, intervalMs);
+	// });
 
-	pongListener = (ev: MessageEvent) => {
-		const data = ev.data;
-		if (!data || typeof data !== 'object') return;
-		if (data.type === SP_PONG) {
-			gotPong = true;
-			if (pingTimer) window.clearInterval(pingTimer);
-			pingTimer = null;
-			console.debug('[SP][ADO] got PONG from overlay');
-			// keep listener for later messages if needed
-		}
-	};
+	// pongListener = (ev: MessageEvent) => {
+	// 	const data = ev.data;
+	// 	if (!data || typeof data !== 'object') return;
+	// 	if (data.type === SP_PONG) {
+	// 		gotPong = true;
+	// 		if (pingTimer) window.clearInterval(pingTimer);
+	// 		pingTimer = null;
+	// 		console.debug('[SP][ADO] got PONG from overlay');
+	// 		// keep listener for later messages if needed
+	// 	}
+	// };
 
-	window.addEventListener('message', pongListener);
+	// window.addEventListener('message', pongListener);
 }
 
 export function closeOverlay() {
-	if (pongListener) {
-		window.removeEventListener('message', pongListener);
-		pongListener = null;
-	}
+	// if (pongListener) {
+	// 	window.removeEventListener('message', pongListener);
+	// 	pongListener = null;
+	// }
 	document.getElementById(OVERLAY_ID)?.remove();
 }

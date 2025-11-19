@@ -1,6 +1,8 @@
 // src/ts/content/fetch/workitems.ts
 //
 import { adoPostJson } from './http';
+import { toFeatureDto, toStoryDto, type FeatureDto, type StoryDto } from './mappers';
+import { runWiql, runWiqlLinks, wiqlFeatures, wiqlStoriesUnderFeatureIds } from './wiql';
 
 export type WorkItemRef = {
 	id: number;
@@ -41,7 +43,6 @@ export async function fetchWorkItemsBatch(
 
 
 
-// PATCH: update System.IterationPath for a single work item
 export async function updateWorkItemIteration(
 	org: string,
 	project: string,
@@ -183,3 +184,102 @@ export async function updateWorkItemTests(
 		tags: newTagString
 	});
 }
+
+
+
+export async function fetchSprintPlannerData(
+	org: string,
+	project: string,
+	areaRoot: string,
+	piRoot: string
+): Promise<{ features: FeatureDto[]; stories: StoryDto[] }> {
+	// 1) IDs via WIQL
+	console.log("[SP][content][SP_REQ_DATA] wiql for features");
+	const featureIds = await runWiql(org, project, wiqlFeatures(areaRoot, piRoot));
+
+	console.log("[SP][content] featureIds:", featureIds);
+
+	// 2) Länkar Feature → Story
+	const storyWiql = wiqlStoriesUnderFeatureIds(featureIds);
+	console.log("[SP][content][storyWiql]: ", storyWiql);
+
+	const links = await runWiqlLinks(org, project, storyWiql);
+	console.log("[SP][content][links]: ", links);
+
+	// parentMap: child (story) -> parent (feature)
+	const parentMap = new Map<number, number>();
+	for (const L of links) {
+		if (typeof L.source === "number" && typeof L.target === "number") {
+			parentMap.set(L.target, L.source);
+		}
+	}
+
+	// 3) storyIds = alla target-ID:n, minus ev. featureIds
+	const rawTargets = links
+		.map(l => l?.target)
+		.filter((id): id is number => typeof id === "number");
+
+	const uniqTargets = Array.from(new Set(rawTargets));
+	const storyIds = uniqTargets.filter(id => !featureIds.includes(id));
+
+	console.log("[SP][content][storyIds] (after filtering features): ", storyIds);
+	console.log("[SP][content] parentMap size:", parentMap.size);
+	if (storyIds[0] != null) {
+		console.log(
+			"[SP][content] sample parent pair:",
+			storyIds[0],
+			"->",
+			parentMap.get(storyIds[0])
+		);
+	}
+
+	// 4) Fetcha work items i chunkar
+	const FEATURE_FIELDS = [
+		"System.Id",
+		"System.WorkItemType",
+		"System.Title",
+		"System.State",
+		"System.AreaPath",
+		"System.IterationPath",
+		"System.Tags"
+	];
+	const STORY_FIELDS = [
+		"System.Id",
+		"System.WorkItemType",
+		"System.Title",
+		"System.State",
+		"System.AreaPath",
+		"System.IterationPath"
+	];
+
+	// features
+	const featureChunks = chunk(featureIds, 200);
+	const featureBatches = await Promise.all(
+		featureChunks.map(ids => fetchWorkItemsBatch(org, project, ids, FEATURE_FIELDS))
+	);
+	const featureItems = featureBatches.flat();
+
+	// stories
+	const storyChunks = chunk(storyIds, 200);
+	const storyBatches = await Promise.all(
+		storyChunks.map(ids => fetchWorkItemsBatch(org, project, ids, STORY_FIELDS))
+	);
+	const storyItems = storyBatches.flat();
+
+	console.log("[SP][content] batch counts →", {
+		featChunks: featureChunks.length,
+		storyChunks: storyChunks.length,
+		features: featureItems.length,
+		stories: storyItems.length
+	});
+
+	console.log("[SP][content] samples → featureItems[0]:", featureItems[0]);
+	console.log("[SP][content] samples → storyItems[0]:", storyItems[0]);
+
+	// 5) Transform
+	const featureDtos = (featureItems || []).map(toFeatureDto);
+	const storyDtos = storyItems.map(wi => toStoryDto(wi, parentMap.get(wi.id)));
+
+	return { features: featureDtos, stories: storyDtos };
+}
+
