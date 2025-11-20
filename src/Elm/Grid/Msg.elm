@@ -14,5 +14,6 @@ type Msg
     | HoverStory (Maybe Int)
     | StoryDrop Int
     | ToggleUnscheduled
+    | ToggleSprint Int
     | OpenWorkItem Int
     | NoOp

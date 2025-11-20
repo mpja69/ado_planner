@@ -1,5 +1,6 @@
 module Grid.Types exposing (Model, empty)
 
+import Set exposing (Set)
 import Types exposing (Feature)
 
 
@@ -11,6 +12,7 @@ type alias Model =
     , draggingStory : Maybe Int
     , hoverStorySprint : Maybe Int
     , showUnscheduled : Bool
+    , hiddenSprints : Set Int
     }
 
 
@@ -23,4 +25,5 @@ empty =
     , draggingStory = Nothing
     , hoverStorySprint = Nothing
     , showUnscheduled = True
+    , hiddenSprints = Set.empty
     }

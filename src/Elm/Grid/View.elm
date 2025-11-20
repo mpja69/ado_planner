@@ -7,7 +7,8 @@ import Html exposing (Html, button, div, span, text)
 import Html.Attributes as A
 import Html.Events as E
 import Json.Decode
-import Svg.Attributes
+import Set exposing (Set)
+import Svg.Attributes as SvgA
 import Types exposing (..)
 import Ui.Icons as Icons
 import Ui.Rails exposing (..)
@@ -91,83 +92,49 @@ view toggles model =
                 -- inga unscheduled alls → i praktiken nästan ingen första kolumn
                 "12px"
 
+        sprintSpec ix =
+            if Set.member ix model.hiddenSprints then
+                "28px"
+
+            else
+                "minmax(0, 1fr)"
+
+        colSpecs : List String
+        colSpecs =
+            leftColWidth
+                :: List.map sprintSpec (List.range 1 model.sprintCount)
+
+        templateCols : String
         templateCols =
-            leftColWidth ++ " repeat(" ++ String.fromInt model.sprintCount ++ ", minmax(0, 1fr))"
+            String.join " " colSpecs
     in
     div
         [ A.style "display" "grid"
         , A.style "grid-template-columns" templateCols
         , A.class ("gap-2" ++ gridBgColor)
         ]
-        (headerRow hasUnscheduled showTray model.sprintCount
+        (headerRow hasUnscheduled showTray model.hiddenSprints model.sprintCount
             :: List.concatMap (featureRowView toggles model showTray) model.rows
         )
 
 
-
--- headerRow : Bool -> Bool -> Int -> Html GM.Msg
--- headerRow hasUnscheduled showTray n =
---     let
---         headCell s =
---             div [ A.class "text-xs font-semibold uppercase tracking-wide text-slate-600 px-2 py-1" ] [ text s ]
---
---         mutedCell =
---             div [ A.class "px-0 py-0" ] []
---
---         unscheduledHeader : Html GM.Msg
---         unscheduledHeader =
---             if not hasUnscheduled then
---                 mutedCell
---
---             else
---                 div
---                     [ A.class "flex items-center gap-2 px-2 py-1 text-xs font-semibold uppercase tracking-wide text-slate-600" ]
---                     [ text "Not in a Sprint in this PI"
---                     , button
---                         [ A.type_ "button"
---                         , A.class "inline-flex items-center justify-center w-5 h-5 rounded hover:bg-slate-200"
---                         , E.onClick GM.ToggleUnscheduled
---                         ]
---                         [ Icons.chevronDown
---                             [ Svg.Attributes.class
---                                 ("w-3 h-3 transition-transform "
---                                     ++ (if showTray then
---                                             "rotate-0"
---
---                                         else
---                                             "-rotate-90"
---                                        )
---                                 )
---                             ]
---                         ]
---                     ]
---     in
---     div [ A.class "contents" ]
---         (unscheduledHeader
---             :: List.map (\i -> headCell ("Sprint " ++ String.fromInt i)) (List.range 1 n)
---         )
-
-
-headerRow : Bool -> Bool -> Int -> Html GM.Msg
-headerRow hasUnscheduled showTray n =
+headerRow : Bool -> Bool -> Set Int -> Int -> Html GM.Msg
+headerRow hasUnscheduled showTray hiddenSprints n =
     let
-        headCell s =
-            div
-                [ A.class "text-xs font-semibold uppercase tracking-wide text-slate-600 px-2 py-1" ]
-                [ text s ]
-
+        mutedCell : Html GM.Msg
         mutedCell =
             div [ A.class "px-0 py-0" ] []
 
-        chevronButton : Html GM.Msg
-        chevronButton =
+        -- UNSCHEDULED-HEADER ------------------------------------
+        chevronUnscheduled : Html GM.Msg
+        chevronUnscheduled =
             button
                 [ A.type_ "button"
                 , A.class "inline-flex items-center justify-center w-5 h-5 rounded hover:bg-slate-200"
                 , E.onClick GM.ToggleUnscheduled
                 ]
                 [ Icons.chevronDown
-                    [ Svg.Attributes.class
+                    [ SvgA.class
                         ("w-3 h-3 transition-transform "
                             ++ (if showTray then
                                     "rotate-0"
@@ -188,22 +155,67 @@ headerRow hasUnscheduled showTray n =
                 -- öppet läge: text + chevron
                 div
                     [ A.class "flex items-center gap-2 px-2 py-1 text-xs font-semibold uppercase tracking-wide text-slate-600" ]
-                    [ text "Not in a Sprint in this PI"
-                    , chevronButton
+                    [ chevronUnscheduled
+                    , text "Not in a Sprint in this PI"
                     ]
 
             else
                 -- hopfällt läge: bara en smal cell med chevronen
                 div
                     [ A.class "flex items-center justify-center px-1 py-1" ]
-                    [ chevronButton ]
+                    [ chevronUnscheduled ]
     in
     div [ A.class "contents" ]
         (unscheduledHeader
-            :: List.map
-                (\i -> headCell ("Sprint " ++ String.fromInt i))
-                (List.range 1 n)
+            :: List.map (sprintHeadCell hiddenSprints) (List.range 1 n)
         )
+
+
+sprintHeadCell : Set Int -> Int -> Html GM.Msg
+sprintHeadCell hiddenSprints ix =
+    let
+        isHidden =
+            Set.member ix hiddenSprints
+
+        label =
+            if isHidden then
+                String.fromInt ix
+
+            else
+                "Sprint " ++ String.fromInt ix
+
+        chevronClass =
+            "w-3 h-3 transition-transform "
+                ++ (if isHidden then
+                        "-rotate-90"
+                        -- gömd → pekar åt höger
+
+                    else
+                        "rotate-0"
+                    -- synlig → pekar nedåt
+                   )
+    in
+    div
+        [ A.class
+            (if isHidden then
+                "flex items-center justify-center px-1 py-1 text-xs font-semibold text-slate-600"
+
+             else
+                "flex items-center gap-2 px-2 py-1 text-xs font-semibold uppercase tracking-wide text-slate-600"
+            )
+        ]
+        [ button
+            [ A.type_ "button"
+            , A.class "inline-flex items-center justify-center w-5 h-5 rounded hover:bg-slate-200"
+            , E.onClick (GM.ToggleSprint ix)
+            ]
+            [ Icons.chevronDown [ SvgA.class chevronClass ] ]
+        , if isHidden then
+            text label
+
+          else
+            text label
+        ]
 
 
 featureRowView : Toggles -> GT.Model -> Bool -> Feature -> List (Html GM.Msg)
@@ -297,6 +309,21 @@ featureRowView toggles model showTray row =
 
 sprintCell : Toggles -> GT.Model -> Feature -> Int -> Html GM.Msg
 sprintCell toggles model row ix =
+    let
+        isHidden : Bool
+        isHidden =
+            Set.member ix model.hiddenSprints
+    in
+    if isHidden then
+        -- smal, tom cell (bredden styrs av grid-template-columns)
+        div [ A.class "min-w-0 px-0 py-0" ] []
+
+    else
+        openSprintCell toggles model row ix
+
+
+openSprintCell : Toggles -> GT.Model -> Feature -> Int -> Html GM.Msg
+openSprintCell toggles model row ix =
     let
         can : Bool
         can =

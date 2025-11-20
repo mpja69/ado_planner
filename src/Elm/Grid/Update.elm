@@ -3,6 +3,7 @@ module Grid.Update exposing (update)
 import Grid.Logic as GL
 import Grid.Msg as GM
 import Grid.Types as GT
+import Set
 import Types exposing (AdoCmd, Iteration(..))
 
 
@@ -14,6 +15,20 @@ update msg model =
 
         GM.ToggleUnscheduled ->
             ( { model | showUnscheduled = not model.showUnscheduled }, [] )
+
+        GM.ToggleSprint ix ->
+            let
+                hidden =
+                    model.hiddenSprints
+
+                hidden2 =
+                    if Set.member ix hidden then
+                        Set.remove ix hidden
+
+                    else
+                        Set.insert ix hidden
+            in
+            ( { model | hiddenSprints = hidden2 }, [] )
 
         GM.DeliveryDragStart fid ->
             ( { model | draggingDelivery = Just fid, hoverDeliverySprint = Nothing }, [] )
