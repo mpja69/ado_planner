@@ -241,7 +241,8 @@ export async function fetchSprintPlannerData(
 		"System.State",
 		"System.AreaPath",
 		"System.IterationPath",
-		"System.Tags"
+		"System.Tags",
+		"Microsoft.VSTS.Common.StackRank"
 	];
 	const STORY_FIELDS = [
 		"System.Id",
@@ -279,7 +280,12 @@ export async function fetchSprintPlannerData(
 	// 5) Transform
 	const featureDtos = (featureItems || []).map(toFeatureDto);
 	const storyDtos = storyItems.map(wi => toStoryDto(wi, parentMap.get(wi.id)));
-
+	featureDtos.sort((a, b) => {
+		if (a.stackRank == null && b.stackRank == null) return 0;
+		if (a.stackRank == null) return 1;
+		if (b.stackRank == null) return -1;
+		return a.stackRank - b.stackRank;
+	});
 	return { features: featureDtos, stories: storyDtos };
 }
 

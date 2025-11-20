@@ -43,6 +43,7 @@ export type ContentToOverlay =
 				areaPath: string;
 				iterationPath: string;
 				tags: string[];
+				stackRank: number | null;
 			}>;
 			stories: Array<{
 				id: number;

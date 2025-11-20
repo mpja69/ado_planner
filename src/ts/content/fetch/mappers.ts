@@ -11,6 +11,7 @@ export type FeatureDto = {
 	areaPath: string;
 	iterationPath: string;
 	tags: string[];
+	stackRank: number | null;
 };
 
 export type StoryDto = {
@@ -41,7 +42,13 @@ export function toFeatureDto(wi: WorkItemRef): FeatureDto {
 			.split(';')
 			.map(s => s.trim())
 			.filter(Boolean);
-
+	const rawRank = wi.fields?.["Microsoft.VSTS.Common.StackRank"];
+	const stackRank =
+		typeof rawRank === "number"
+			? rawRank
+			: rawRank != null
+				? Number(rawRank)
+				: null;
 	return {
 		id: wi.id,
 		title: String(f['System.Title'] ?? ''),
@@ -49,6 +56,7 @@ export function toFeatureDto(wi: WorkItemRef): FeatureDto {
 		areaPath: String(f['System.AreaPath'] ?? ''),
 		iterationPath: String(f['System.IterationPath'] ?? ''),
 		tags,
+		stackRank,
 	};
 }
 
