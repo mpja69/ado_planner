@@ -100,9 +100,9 @@ hasUnscheduledItems rows =
     List.any hasUnscheduledItemsInRow rows
 
 
-canInteract : Feature -> Bool
-canInteract f =
-    Status.isOpen f.status
+canInteract : Status.Status -> Bool
+canInteract status =
+    Status.isOpen status
 
 
 iterationToSprint : Iteration -> Maybe Int

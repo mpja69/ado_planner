@@ -13,6 +13,11 @@ update msg model =
             , identity
             )
 
+        SM.SetLockClosedItems flag ->
+            ( { model | lockClosedItems = flag }
+            , \cfg -> ST.toConfig { model | lockClosedItems = flag } cfg
+            )
+
         SM.SetEnableTests flag ->
             ( { model | enableTests = flag }
             , \cfg -> ST.toConfig { model | enableTests = flag } cfg

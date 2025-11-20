@@ -49,6 +49,7 @@ viewBody model =
     div [ A.class "grid grid-cols-1 md:grid-cols-2 gap-4 mt-1" ]
         [ viewTestsSection model
         , viewTeamsSection model
+        , viewDragRulesSection model
         ]
 
 
@@ -122,4 +123,21 @@ smallTextInput labelTxt value toMsg =
             , E.onInput toMsg
             ]
             []
+        ]
+
+
+viewDragRulesSection : ST.Model -> Html SM.Msg
+viewDragRulesSection model =
+    div [ A.class "flex flex-col gap-2" ]
+        [ span [ A.class "text-[11px] uppercase tracking-wide text-slate-500" ]
+            [ text "Drag & drop / Moving rules" ]
+        , label [ A.class "flex items-center gap-2 text-xs text-slate-700" ]
+            [ input
+                [ A.type_ "checkbox"
+                , A.checked model.lockClosedItems
+                , E.onCheck SM.SetLockClosedItems
+                ]
+                []
+            , text "Lock closed items (disable drag for Done/Closed)"
+            ]
         ]

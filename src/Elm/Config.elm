@@ -32,6 +32,7 @@ type alias TagPolicy =
 type alias Config =
     { areaMode : AreaMode
     , tags : TagPolicy
+    , lockClosedItems : Bool -- NYTT
     }
 
 
@@ -45,6 +46,7 @@ default =
         , teamTags = Set.fromList [ "TeamAccount", "TeamAssort", "TeamPortal" ]
         , editableTests = False
         }
+    , lockClosedItems = True -- NYTT
     }
 
 

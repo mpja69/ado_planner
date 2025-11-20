@@ -18,6 +18,7 @@ import Ui.Theme exposing (..)
 type alias Toggles =
     { showTests : Bool
     , editableTests : Bool
+    , lockClosedItems : Bool
     }
 
 
@@ -222,8 +223,11 @@ featureRowView : Toggles -> GT.Model -> Bool -> Feature -> List (Html GM.Msg)
 featureRowView toggles model showTray row =
     let
         can =
-            -- GL.canInteract row -- HACK: Always make the cards interactive!
-            True
+            if toggles.lockClosedItems then
+                GL.canInteract row.status
+
+            else
+                True
 
         --mode
         warnKind : FeatureWarn
@@ -260,7 +264,7 @@ featureRowView toggles model showTray row =
                         [ div [ A.class "mt-1 rounded-lg border border-slate-200 bg-white/70 p-1" ]
                             [ div [ A.class "text-[9px] text-slate-500 uppercase" ] [ text "Stories" ]
                             , div [ A.class "flex flex-col gap-1" ]
-                                (List.map (\s -> storyCard False can s) (GL.unscheduledStories row))
+                                (List.map (\s -> storyCard toggles False can s) (GL.unscheduledStories row))
                             ]
                         ]
 
@@ -327,8 +331,11 @@ openSprintCell toggles model row ix =
     let
         can : Bool
         can =
-            -- GL.canInteract row -- HACK: Always make the cards interactive!
-            True
+            if toggles.lockClosedItems then
+                GL.canInteract row.status
+
+            else
+                True
 
         -- 1) Content in this cell -----------------------------------
         storiesHere : List Story
@@ -496,7 +503,7 @@ openSprintCell toggles model row ix =
         (A.class (baseClass ++ validCls ++ hoverCls ++ forbidClass)
             :: attrsIf can (storyHandlers ++ deliveryHandlers)
         )
-        (List.map (\s -> storyCard (isGhostStory s) can s) storiesHere
+        (List.map (\s -> storyCard toggles (isGhostStory s) can s) storiesHere
             ++ (if isDeliveryHere then
                     [ featureCard toggles isGhostDelivery (GL.selectWarnKind row) can row ]
 
@@ -507,9 +514,17 @@ openSprintCell toggles model row ix =
         )
 
 
-storyCard : Bool -> Bool -> Story -> Html GM.Msg
-storyCard isGhost can s =
+storyCard : Toggles -> Bool -> Bool -> Story -> Html GM.Msg
+storyCard toggles isGhost canOLD s =
     let
+        can : Bool
+        can =
+            if toggles.lockClosedItems then
+                GL.canInteract s.status
+
+            else
+                True
+
         ghostClass =
             if isGhost then
                 " opacity-30 saturate-50"
@@ -635,7 +650,6 @@ testStrip can editableTests featureId tests =
         mk label active kind =
             testChipView Tiny
                 { label = label, active = active }
-                -- HACK: Do not update tests
                 (if can && editableTests then
                     [ E.onClick (GM.ToggleTest featureId kind) ]
 

@@ -471,6 +471,7 @@ view model =
         toggles =
             { showTests = model.config.tags.enableTests
             , editableTests = model.config.tags.editableTests
+            , lockClosedItems = model.config.lockClosedItems
             }
 
         selectedTeam : Maybe String

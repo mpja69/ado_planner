@@ -17,6 +17,7 @@ type alias Model =
     , enableTeamTags : Bool
     , teamTagsInput : String
     , editableTests : Bool
+    , lockClosedItems : Bool -- NYTT
     }
 
 
@@ -39,6 +40,7 @@ fromConfig cfg =
     , enableTeamTags = tp.enableTeamTags
     , teamTagsInput = teamTagsStr
     , editableTests = tp.editableTests
+    , lockClosedItems = cfg.lockClosedItems -- NYTT
     }
 
 
@@ -65,4 +67,4 @@ toConfig m oldCfg =
             , editableTests = m.editableTests
             }
     in
-    { oldCfg | tags = newTagPolicy }
+    { oldCfg | tags = newTagPolicy, lockClosedItems = m.lockClosedItems }

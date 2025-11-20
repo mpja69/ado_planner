@@ -10,3 +10,4 @@ type Msg
     | SetEnableTeamTags Bool
     | SetTeamTagsInput String
     | ToggleEditableTests Bool
+    | SetLockClosedItems Bool
