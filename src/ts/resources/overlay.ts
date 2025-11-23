@@ -7,6 +7,7 @@ import {
 	SP_SET_ITERATION,
 	SP_SET_TESTS,
 	SP_OPEN_WORKITEM,
+	SP_ERROR,
 } from '../shared/messages';
 
 /** Wire Elm ports for iterations + areas and general message bridge */
@@ -118,6 +119,13 @@ function wireElm(app: any) {
 				if (msg.payload && app?.ports?.receiveData) {
 					console.log('[SP][overlay] got SP_DATA → forward to Elm', { f: msg.payload.features?.length ?? 0, s: msg.payload.stories?.length ?? 0 });
 					app.ports.receiveData.send(msg.payload);
+				}
+				break;
+			}
+			case SP_ERROR: {
+				if (msg.error && app?.ports?.receiveData) {
+					console.warn("[SP][overlay] forwarding SP_ERROR → Elm", msg.error);
+					app.ports.receiveError?.send(msg.error);
 				}
 				break;
 			}

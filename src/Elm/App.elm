@@ -80,6 +80,16 @@ port sendUpdateTests :
 port openWorkItem : Int -> Cmd msg
 
 
+type alias ErrorInfo =
+    { source : String
+    , message : String
+    , detail : String
+    }
+
+
+port receiveError : (ErrorInfo -> msg) -> Sub msg
+
+
 
 -- TODO:
 -- Add planning of of stories without Feature
@@ -93,6 +103,7 @@ type alias Model =
     , settings : ST.Model
     , config : Config.Config
     , piSprintNames : Dict String (List String)
+    , lastError : Maybe ErrorInfo
     }
 
 
@@ -114,6 +125,7 @@ init _ =
             , config = cfg
             , settings = ST.fromConfig cfg
             , piSprintNames = Dict.empty
+            , lastError = Nothing
             }
     in
     ( model, Cmd.batch [ requestAreas (), requestIterations () ] )
@@ -130,6 +142,7 @@ subscriptions _ =
         , receivePiMeta GotPiMeta
         , receiveData GotData
         , receiveAreaFavorites GotAreaFavorites
+        , receiveError GotError
         ]
 
 
@@ -145,6 +158,7 @@ type Msg
     | GotPiMeta (List { root : String, sprintNames : List String })
     | GotData { features : List Ado.AdoFeature, stories : List Ado.AdoStory }
     | GotAreaFavorites (List String)
+    | GotError ErrorInfo
     | NoOp
 
 
@@ -157,6 +171,13 @@ update msg model =
     case msg of
         NoOp ->
             ( model, Cmd.none )
+
+        GotError errorPayload ->
+            let
+                _ =
+                    Debug.log "GotError" errorPayload
+            in
+            ( { model | lastError = Just errorPayload }, Cmd.none )
 
         SettingsMsg smsg ->
             let
@@ -506,7 +527,8 @@ view model =
         -- override rows for view
     in
     div [ A.class ("w-full h-screen p-6" ++ GV.appBgColor) ]
-        [ div [ A.class "text-2xl font-bold" ] [ text "Sprint Planner" ]
+        [ viewError model.lastError
+        , div [ A.class "text-2xl font-bold" ] [ text "Sprint Planner" ]
         , SV.view model.settings |> Html.map SettingsMsg
         , FV.view model.config model.filters |> Html.map Filters
         , if List.isEmpty rowsFiltered then
@@ -515,3 +537,21 @@ view model =
           else
             GV.view toggles gridModel |> Html.map Grid
         ]
+
+
+viewError : Maybe ErrorInfo -> Html msg
+viewError maybeErr =
+    case maybeErr of
+        Nothing ->
+            text ""
+
+        Just err ->
+            div
+                [ A.class "mb-2 p-3 rounded-lg bg-red-100 border border-red-300 text-red-800" ]
+                [ Html.strong [] [ text "Authentication or Network Error" ]
+                , Html.br [] []
+
+                -- , text err.message
+                , text "Please refresh your the browser and try again."
+                , div [ A.class "text-xs mt-1 opacity-60" ] [ text "Probably the login session has expired, due to inactivity." ] -- err.detail ]
+                ]

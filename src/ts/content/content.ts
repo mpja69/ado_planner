@@ -7,7 +7,8 @@ import {
 	SP_REQ_DATA, SP_DATA,
 	SP_SET_ITERATION,
 	SP_SET_TESTS,
-	SP_OPEN_WORKITEM
+	SP_OPEN_WORKITEM,
+	SP_ERROR
 } from '../shared/messages';
 import { fetchProjectIterations, flattenPiRoots, pickCurrentAndNext } from "./fetch/iterations";
 import { fetchAreaRoots } from "./fetch/areas";
@@ -107,9 +108,16 @@ window.addEventListener('message', async (ev) => {
 
 			} catch (e) {
 				console.error('[SP][content]', SP_REQ_AREAS, 'failed', e);
-				reply(ev, { type: SP_AREAS, areas: [] });
-				// Skicka tom favorites också vid fel, så Elm-koden inte väntar på något:
-				reply(ev, { type: SP_AREA_FAVORITES, favorites: [] });
+				// reply(ev, { type: SP_AREAS, areas: [] });
+				// reply(ev, { type: SP_AREA_FAVORITES, favorites: [] });
+				reply(ev, {
+					type: SP_ERROR,
+					error: {
+						source: "areas",
+						message: "Could not fetch areas from Azure DevOps.",
+						detail: String(e)
+					}
+				});
 			}
 			break;
 		}
@@ -137,8 +145,16 @@ window.addEventListener('message', async (ev) => {
 
 				console.log('[SP][content] sent SP_ITERATIONS', iterations);
 			} catch (e) {
-				reply(ev, { type: SP_ITERATIONS, iterations: [] });
 				console.error('[SP][content] iterations failed', e);
+				// reply(ev, { type: SP_ITERATIONS, iterations: [] });
+				reply(ev, {
+					type: SP_ERROR,
+					error: {
+						source: "iterations",
+						message: "Could not fetch iterations from Azure DevOps.",
+						detail: String(e)
+					}
+				});
 			}
 			break;
 		}
@@ -164,7 +180,15 @@ window.addEventListener('message', async (ev) => {
 				);
 			} catch (e) {
 				console.error("[SP][content] SP_REQ_DATA failed", e);
-				reply(ev, { type: SP_DATA, payload: { features: [], stories: [] } });
+				// reply(ev, { type: SP_DATA, payload: { features: [], stories: [] } });
+				reply(ev, {
+					type: SP_ERROR,
+					error: {
+						source: "data",
+						message: "Could not fetch data from Azure DevOps.",
+						detail: String(e)
+					}
+				});
 			}
 			break;
 		}
